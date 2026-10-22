@@ -917,3 +917,72 @@ h4.sec{
   .exmedia img{height:380px}
   .hm-wrap{display:flex;flex-direction:column;align-items:center}
 }
+
+/* ===================================================== nutrition & log == */
+.ntl{font-size:16px;font-weight:600;letter-spacing:-.012em;line-height:1.25}
+.nalert{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--orange) 45%,transparent)}
+
+/* progress meter — overshoot drawn in orange on top of the full bar */
+.meter{position:relative;height:7px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-top:8px}
+.meter i,.meter b{position:absolute;left:0;top:0;bottom:0;border-radius:4px;transition:width var(--med) var(--ease)}
+.meter b{background:var(--orange);opacity:.9}
+
+/* day picker: selection ring, future days greyed, dot = calories vs goal */
+.wday.sel{background:var(--surface-2)}
+.wday:disabled{opacity:.35}
+.wday .dot.hit{background:var(--acc)}
+.wday .dot.over{background:var(--orange)}
+.wday .dot.under{background:var(--blue)}
+
+.nmeals{display:flex;flex-direction:column}
+.nmeal{display:flex;align-items:baseline;gap:10px;padding:10px 2px;border-top:var(--hair) solid var(--sep);text-align:left;width:100%}
+.nmeal:first-child{border-top:0;padding-top:2px}
+.nmeal:active{background:var(--surface-2)}
+.nmeal .tm{font-size:13px;color:var(--label-3);font-variant-numeric:tabular-nums;width:42px;flex:none}
+.nmeal .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nmeal .v{font-size:13px;color:var(--label-2);flex:none;font-variant-numeric:tabular-nums}
+.nmeal .v b{color:var(--label);font-weight:600}
+
+.nfield{display:flex;flex-direction:column;gap:6px;min-width:0}
+.nfield>span:first-child{font-size:13px;color:var(--label-2);text-align:center}
+.nfield-in{display:flex;align-items:baseline;justify-content:center;gap:4px;background:var(--surface-2);border-radius:10px;height:44px;padding:0 12px;align-items:center}
+.nfield-in .num{width:100%;min-width:0;text-align:center;background:none;border:none;outline:none;font-size:17px;font-weight:500;color:var(--label)}
+.nfield-in i{font-style:normal;font-size:12px;color:var(--label-2);flex:none}
+.nfield-in:focus-within{box-shadow:inset 0 0 0 2px var(--acc)}
+
+.nphoto{border-radius:10px;object-fit:cover;flex:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.iconbtn.sm{width:32px;height:32px;font-size:15px;background:none}
+.iconbtn:disabled{opacity:.3}
+
+.cal-d:disabled{opacity:.3}
+.cal-d.sel{background:var(--surface-2)}
+.cal-d.hit span:first-child{color:var(--acc);font-weight:600}
+.cal-ic{display:flex;gap:1px;font-size:11px;height:11px}
+
+/* calories per day, goal as a dashed line */
+.nbars{position:relative;display:grid;grid-template-columns:repeat(var(--n),1fr);gap:3px;height:120px;align-items:end;margin-top:6px}
+.nbars .goal{position:absolute;left:0;right:0;border-top:1.5px dashed var(--label-3);z-index:1;pointer-events:none}
+.nbar{height:100%;display:flex;align-items:flex-end}
+.nbar i{display:block;width:100%;border-radius:4px 4px 2px 2px;min-height:0;transition:height var(--med) var(--ease)}
+.nbar-l{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:5px;text-align:center;font-size:11px;color:var(--label-3);text-transform:uppercase;font-weight:500}
+.nbar-l em{display:flex;justify-content:center;gap:1px;height:13px;margin-top:2px;font-size:11px}
+
+/* surprises */
+.egg-ic{width:64px;height:64px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--acc);background:var(--acc-soft)}
+.fx-layer{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:1000}
+
+/* motivation carousel */
+.motiv{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 calc(-1 * var(--pad)) 12px;padding:0 var(--pad) 2px;scroll-padding:0 var(--pad);scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.motiv::-webkit-scrollbar{display:none}
+.motiv-c{flex:none;width:72%;max-width:300px;min-height:132px;scroll-snap-align:start;background:var(--surface);border-radius:var(--r-card);padding:16px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;position:relative;overflow:hidden;text-align:left}
+.motiv-i{font-size:24px;color:var(--acc)}
+.motiv-t{font-size:16px;font-weight:500;letter-spacing:-.012em;line-height:1.3;position:relative}
+.motiv-c.ph{padding:0;justify-content:flex-end}
+.motiv-c.ph .motiv-img{position:absolute;inset:0;width:100%!important;height:100%!important;border-radius:0}
+.motiv-c.ph .motiv-t{margin:0;padding:28px 14px 12px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.65))}
+.motiv-c.add{width:120px;align-items:center;justify-content:center;color:var(--label-2);font-size:14px;gap:6px}
+.motiv-c.add .icn{font-size:22px;color:var(--acc)}
+.motiv-c.add:active{background:var(--surface-2)}
+.tag.nt{text-transform:none}
+.nchip{display:inline-flex;align-items:center}
+.cal-legend span{display:inline-flex;align-items:center}

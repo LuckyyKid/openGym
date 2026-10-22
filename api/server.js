@@ -48,6 +48,10 @@ function atomicWrite(file, content) {
   fs.renameSync(tmp, file);
 }
 const stateFile = uid => path.join(DATA, 'state-' + uid.replace(/[^a-zA-Z0-9_-]/g, '') + '.json');
+// Ids are client-made (uid() in format.js) — anything else is refused rather than sanitised,
+// so a crafted id can never point outside this user's folder.
+const photoFile = (uid, id) => /^[a-z0-9]{6,32}$/.test(String(id || ''))
+  ? path.join(DATA, 'photos', uid.replace(/[^a-zA-Z0-9_-]/g, ''), id + '.jpg') : null;
 function readState(uid) {
   try { return JSON.parse(fs.readFileSync(stateFile(uid), 'utf8')); } catch { return null; }
 }
@@ -389,6 +393,39 @@ const routes = {
     delete body.state.active;              // in-progress workouts stay device-local
     atomicWrite(stateFile(user.id), JSON.stringify(body.state));
     json(res, 200, { ok: true, ts: body.state._ts || null });
+  },
+
+  // Photos (cardio proof, motivation) live next to the state, one JPEG data URL per file —
+  // the state itself only carries their ids, so it stays small enough to sync on every tap.
+  'PUT /api/photos': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    const file = photoFile(user.id, body.id);
+    if (!file) return json(res, 400, { error: 'bad id' });
+    if (typeof body.data !== 'string' || !body.data.startsWith('data:image/jpeg;base64,')) return json(res, 400, { error: 'jpeg data url required' });
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    atomicWrite(file, body.data);
+    json(res, 200, { ok: true });
+  },
+
+  'GET /api/photos': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const file = photoFile(user.id, new URL(req.url, 'http://x').searchParams.get('id'));
+    if (!file) return json(res, 400, { error: 'bad id' });
+    try { json(res, 200, { data: fs.readFileSync(file, 'utf8') }); }
+    catch { json(res, 404, { error: 'no such photo' }); }
+  },
+
+  'POST /api/photos/delete': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    const file = photoFile(user.id, body.id);
+    if (!file) return json(res, 400, { error: 'bad id' });
+    try { fs.unlinkSync(file); } catch {}
+    json(res, 200, { ok: true });
   },
 
   'GET /api/push/public-key': async (req, res) => json(res, 200, { key: vapid.publicKey }),

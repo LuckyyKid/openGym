@@ -267,7 +267,10 @@ export function planPrintHTML(S, owner) {
  * Render the plan and open the browser's print dialog (→ Save as PDF).
  * Uses a hidden iframe so we never navigate away or trip a popup blocker.
  */
-export function printPlan(S, owner) {
+export function printPlan(S, owner) { printHTML(planPrintHTML(S, owner)) }
+
+/** Print any self-contained HTML document through a hidden iframe (also used by the nutrition report). */
+export function printHTML(html) {
   const ifr = document.createElement('iframe')
   ifr.setAttribute('aria-hidden', 'true')
   ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;'
@@ -282,7 +285,7 @@ export function printPlan(S, owner) {
     try { w.print() } catch (e) { cleanup() }
   }
   const doc = ifr.contentWindow.document
-  doc.open(); doc.write(planPrintHTML(S, owner)); doc.close()
+  doc.open(); doc.write(html); doc.close()
   // Give the iframe a tick to lay out before printing.
   if (doc.readyState === 'complete') setTimeout(run, 120)
   else ifr.onload = () => setTimeout(run, 120)

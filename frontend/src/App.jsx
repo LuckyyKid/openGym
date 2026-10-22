@@ -24,6 +24,8 @@ import History from './views/History.jsx'
 import Library from './views/Library.jsx'
 import Settings from './views/Settings.jsx'
 import Admin from './views/Admin.jsx'
+import Nutrition from './views/Nutrition.jsx'
+import Celebrate from './components/Celebrate.jsx'
 
 bindUI(useUI)   // lets the shared controls open sheets without importing the store at module scope
 
@@ -69,6 +71,7 @@ function Shell() {
             <Routes>
               <Route path="/home" element={<Home />} />
               <Route path="/plan" element={<Plan />} />
+              <Route path="/nutrition" element={<Nutrition />} />
               <Route path="/plan/r/:id" element={<RoutineEdit />} />
               <Route path="/workout" element={<Workout />} />
               <Route path="/stats" element={<Stats />} />
@@ -85,6 +88,7 @@ function Shell() {
       <RestTimer />
       <Modals />
       <Toast />
+      <Celebrate />
     </>
   )
 }

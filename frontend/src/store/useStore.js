@@ -15,7 +15,11 @@ export const DEF = {
   // that a profile which never chose (loaded state is overlaid on DEF, on every path: local,
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and
   // keeps the column it had. See effortOf.
-  reminder: { on: false, time: '08:00', tz: null }, effort: null
+  reminder: { on: false, time: '08:00', tz: null }, effort: null,
+  // Nutrition & daily log (lib/nutrition.js). nutri: goals, null = defaults. nutriAck: per-day
+  // surplus already acknowledged. fun: surprises state + personal dates (lib/fun.js).
+  // motivation: [{ id, photo?, text? }] the user's own carousel cards; photos are ids (lib/photos.js).
+  meals: [], days: {}, nutri: null, nutriAck: {}, fun: {}, motivation: []
 }
 const clone = o => JSON.parse(JSON.stringify(o))
 
@@ -27,7 +31,8 @@ function loadState() {
   return clone(DEF)
 }
 
-const hasData = st => !!((st.workouts || []).length || (st.routines || []).length || (st.bodyweight || []).length)
+const hasData = st => !!((st.workouts || []).length || (st.routines || []).length || (st.bodyweight || []).length ||
+  (st.meals || []).length || Object.keys(st.days || {}).length)
 
 export const useStore = create((set, get) => {
   let pushTm = null

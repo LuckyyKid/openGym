@@ -22,6 +22,11 @@ export const useUI = create((set, get) => ({
   toastMsg: '',
   timer: null,         // rest countdown between sets — { left, total, endsAt }
   work: null,          // work countdown DURING a timed set (issue #16) — { left, total, endsAt, label }
+  fx: null,            // celebration overlay (components/Celebrate.jsx) — { kind, n }
+
+  celebrate(kind) { set({ fx: { kind, n: Date.now() } }) },
+  // only clears the run that asked — a replay started meanwhile keeps going
+  endFx(n) { if (get().fx && get().fx.n === n) set({ fx: null }) },
 
   openSheet(render, { kind = 'sheet', locked = false } = {}) {
     const id = uid()

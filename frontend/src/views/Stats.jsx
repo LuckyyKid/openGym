@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { EXIDX } from '../lib/exercises.js'
 import { lastBW, streakWeeks, setLabel, modeOf, effortOf } from '../lib/history.js'
-import { fmtNum, fmtDate, fmtVol, todayISO, weekKey } from '../lib/format.js'
+import { fmtNum, fmtDate, fmtVol, todayISO, weekKey, DAYS } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
@@ -17,6 +17,45 @@ import {
   effortHistogram, isHardSet, HARD_RIR
 } from '../lib/effort.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
+import { goalsOf, periodSummary, balanceOf } from '../lib/nutrition.js'
+
+// Calories day by day against the goal, over real calendar days — an empty day is an empty
+// column, not skipped. Gym and cardio days are marked under each column.
+function NutritionStats({ S }) {
+  const nav = useNavigate()
+  const [win, setWin] = useState(7)
+  const g = goalsOf(S)
+  const p = periodSummary(S, win)
+  const max = Math.max(g.kcal * 1.25, ...p.days.map(d => d.kcal))
+  const col = d => !d.meals ? 'var(--surface-2)' : { over: 'var(--orange)', hit: 'var(--acc)', under: 'var(--blue)' }[balanceOf(d.kcal, g.kcal).status]
+  return <div className="card">
+    <div className="row between" style={{ marginBottom: 8 }}>
+      <h2 style={{ margin: 0 }}>{t('Nutrition')}</h2>
+      <Button size="sm" variant="ghost" trailingIcon="chevronRight" onClick={() => nav('/nutrition')}>{t('Open')}</Button>
+    </div>
+    <Segmented className="seg-range" value={win} onChange={setWin}
+      options={[{ value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' }]} />
+    <div className="nbars" style={{ '--n': p.days.length }}>
+      <span className="goal" style={{ bottom: (g.kcal / max) * 100 + '%' }} />
+      {p.days.map(d => <div key={d.iso} className="nbar" title={d.iso + ' · ' + d.kcal + ' kcal'}>
+        <i style={{ height: Math.max(d.meals ? 3 : 0, (d.kcal / max) * 100) + '%', background: col(d) }} />
+      </div>)}
+    </div>
+    {win === 7 && <div className="nbar-l">{p.days.map(d => <span key={d.iso}>
+      {t(DAYS[new Date(d.iso + 'T12:00:00').getDay()])}
+      <em>{d.gym && <Icon name="dumbbell" style={{ color: 'var(--acc)' }} />}{d.run && <Icon name="figureRun" style={{ color: 'var(--orange)' }} />}</em>
+    </span>)}</div>}
+    <div className="tiles" style={{ marginTop: 12, marginBottom: 0 }}>
+      <div className="tile"><div className="l"><Icon name="fork" />{t('Avg. calories')}</div><div className="v" style={{ fontSize: 22 }}>{p.avgKcal == null ? '—' : fmtNum(p.avgKcal)}</div></div>
+      <div className="tile"><div className="l"><Icon name="bolt" />{t('Avg. protein')}</div><div className="v" style={{ fontSize: 22 }}>{p.avgProt == null ? '—' : fmtNum(p.avgProt) + ' g'}</div></div>
+      <div className="tile"><div className="l"><Icon name="target" />{t('On target')}</div><div className="v" style={{ fontSize: 22 }}>{p.onTarget} / {p.logged}</div></div>
+      <div className="tile"><div className="l"><Icon name="check" />{t('Protein goal hit')}</div><div className="v" style={{ fontSize: 22 }}>{p.protHit} / {p.logged}</div></div>
+      <div className="tile"><div className="l"><Icon name="dumbbell" />{t('Gym days')}</div><div className="v" style={{ fontSize: 22 }}>{p.gymDays} / {win}</div></div>
+      <div className="tile"><div className="l"><Icon name="figureRun" />{t('Cardio')}</div><div className="v" style={{ fontSize: 22 }}>{p.runDays}{p.km ? <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> · {fmtNum(p.km)} km</span> : ''}</div></div>
+    </div>
+    <div className="small dim" style={{ marginTop: 8 }}>{t('Averages count only days with meals logged.')}</div>
+  </div>
+}
 
 // Which muscles the training in a window actually hit — and, the point of the card,
 // which ones it keeps missing. Shading is relative within the window (lib/muscles.js).
@@ -209,6 +248,8 @@ export default function Stats() {
       <h2>{t('Activity — last 12 months')} <span className="dim" style={{ textTransform: 'none', letterSpacing: 0 }}>· {t('by time trained')}</span></h2>
       <Heatmap S={S} onDay={iso => { const ws = S.workouts.filter(w => w.d === iso); if (ws.length === 1) workoutDetailSheet(ws[0]); else if (ws.length) calendarSheet(iso) }} />
     </div>
+
+    {((S.meals || []).length > 0 || Object.keys(S.days || {}).length > 0) && <NutritionStats S={S} />}
 
     {S.workouts.length > 0 && <MuscleBalance S={S} />}
     {anyEffort && <EffortCard S={S} />}

@@ -1,14 +1,71 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
-import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
+import { fmtNum, fmtL, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import { glyphOf } from '../lib/glyphs.js'
+import { goalsOf, dayTotals, balanceOf, dayStreak } from '../lib/nutrition.js'
+import { mealSheet, runDailyChecks, motivationSheet, PhotoThumb, photoViewer } from '../nutri-sheets.jsx'
+
+// Built-in lines for the motivation carousel; the user's own cards (Settings) come first.
+const QUOTES = [
+  { icon: 'flame', text: 'Small steps every day add up to big results.' },
+  { icon: 'dumbbell', text: 'The only bad workout is the one that did not happen.' },
+  { icon: 'fork', text: 'You cannot out-train what you do not log.' },
+  { icon: 'drop', text: 'Drink water. Then drink a bit more.' },
+  { icon: 'moon', text: 'Rest is part of the plan, not a break from it.' },
+  { icon: 'trophy', text: 'Progress, not perfection.' },
+  { icon: 'target', text: 'Show up today — future you is watching.' }
+]
+
+function NutritionCard({ S, onOpen }) {
+  const g = goalsOf(S)
+  const iso = todayISO()
+  const tot = dayTotals(S, iso)
+  const { status, diff } = balanceOf(tot.kcal, g.kcal)
+  const pct = Math.min(1, tot.kcal / g.kcal)
+  const col = !tot.meals ? 'var(--label-3)' : status === 'over' ? 'var(--orange)' : status === 'hit' ? 'var(--acc)' : 'var(--blue)'
+  const R = 26, C = 2 * Math.PI * R
+  return <div className="card tappable" style={{ cursor: 'pointer' }} onClick={onOpen}>
+    <div className="row between" style={{ marginBottom: 10 }}>
+      <h2 style={{ margin: 0 }}>{t('Nutrition today')}</h2>
+      <Button size="sm" icon="plus" onClick={e => { e.stopPropagation(); mealSheet(iso) }}>{t('Meal')}</Button>
+    </div>
+    <div className="row" style={{ gap: 16 }}>
+      <svg width="64" height="64" viewBox="0 0 64 64" style={{ flex: 'none' }} aria-hidden="true">
+        <circle cx="32" cy="32" r={R} fill="none" stroke="var(--surface-2)" strokeWidth="7" />
+        <circle cx="32" cy="32" r={R} fill="none" stroke={col} strokeWidth="7" strokeLinecap="round"
+          strokeDasharray={C} strokeDashoffset={C * (1 - pct)} transform="rotate(-90 32 32)" />
+      </svg>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-.02em' }}>{fmtNum(tot.kcal)} <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}>/ {fmtNum(g.kcal)} kcal</span></div>
+        <div className="small" style={{ color: col, fontWeight: 500 }}>{!tot.meals ? t('Nothing logged yet') : status === 'hit' ? t('Goal reached!') : status === 'over' ? t('{0} kcal over', fmtNum(diff)) : t('{0} kcal to go', fmtNum(-diff))}</div>
+        <div className="small muted row" style={{ gap: 10, marginTop: 2 }}>
+          <span className="row" style={{ gap: 3 }}><Icon name="bolt" style={{ color: 'var(--purple)' }} />{fmtNum(tot.prot)} / {fmtNum(g.prot)} g</span>
+          <span className="row" style={{ gap: 3 }}><Icon name="drop" style={{ color: 'var(--teal)' }} />{fmtL(tot.water)} / {fmtL(g.water)} L</span>
+        </div>
+      </div>
+      <Icon name="chevronRight" className="chev" style={{ marginLeft: 'auto' }} />
+    </div>
+  </div>
+}
+
+function Motivation({ S }) {
+  const cards = [...(S.motivation || []).map(c => ({ ...c, own: true })), ...QUOTES]
+  return <div className="motiv">
+    {cards.map((c, i) => <div key={c.id || i} className={'motiv-c' + (c.photo ? ' ph' : '')}>
+      {c.photo && <PhotoThumb id={c.photo} size="100%" className="motiv-img" onClick={() => photoViewer(c.photo)} />}
+      {!c.photo && <Icon name={c.icon || 'sparkles'} className="motiv-i" />}
+      {c.text && <div className="motiv-t">{c.own ? c.text : t(c.text)}</div>}
+    </div>)}
+    <button className="motiv-c add" onClick={motivationSheet}><Icon name="plus" /><span>{t('Add your own')}</span></button>
+  </div>
+}
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -16,6 +73,8 @@ export default function Home() {
   const S = useStore(s => s.S)
   const user = useStore(s => s.user)
   const [weekOffset, setWeekOffset] = useState(0)
+  useEffect(() => { runDailyChecks() }, [])
+  const streak = dayStreak(S)
 
   const today = new Date()
   const routine = effectiveRoutine(S, todayISO())
@@ -74,6 +133,8 @@ export default function Home() {
       </div>
     </div>
 
+    <NutritionCard S={S} onOpen={() => nav('/nutrition')} />
+
     {!S.routines.length && !S.active && (
       <div className="card">
         <div className="row" style={{ gap: 10, marginBottom: 6 }}>
@@ -123,10 +184,13 @@ export default function Home() {
             <Icon name="flame" style={{ color: 'var(--orange)' }} />
             {t('{0} week streak', streakWeeks(S))}
           </div>
+          {streak.n > 1 && <div className="small" style={{ marginTop: 2, color: 'var(--orange)', fontWeight: 500 }}>{t('{0} days logged in a row', streak.n)}</div>}
           <div className="muted small" style={{ marginTop: 2 }}>{wThisWeek}{plannedPerWeek ? ' / ' + plannedPerWeek : ''} {t('this week')} · {t(S.workouts.length === 1 ? '{0} workout total' : '{0} workouts total', S.workouts.length)}</div>
         </div>
         <Icon name="calendar" className="chev" style={{ fontSize: 20 }} />
       </div>
     </div>
+
+    <Motivation S={S} />
   </div>
 }
