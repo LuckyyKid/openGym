@@ -1,6 +1,22 @@
+# API only — the frontend is served by Vercel, which proxies /api/* here (see vercel.json)
+# so the browser sees a single origin, as passkeys require.
 services:
   - type: web
-    name: opengym
-    env: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    name: opengym-api
+    runtime: docker
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    plan: starter                # persistent disks need a paid plan
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      # The public Vercel origin, e.g. RP_ID=opengym.vercel.app, ORIGIN=https://opengym.vercel.app
+      - key: RP_ID
+        sync: false
+      - key: ORIGIN
+        sync: false
+    disk:
+      name: data
+      mountPath: /data           # users, passkeys, per-user state, session secret
+      sizeGB: 1
