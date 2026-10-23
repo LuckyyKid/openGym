@@ -26,7 +26,8 @@ export default function Plan() {
   const lived = d => {
     const iso = isoThisWeek(d)
     if (iso > today) return null
-    const ws = workoutsOn(S, iso), tot = dayTotals(S, iso)
+    // a workout finished without a checked set is saved with no entries — not a done session
+    const ws = workoutsOn(S, iso).filter(w => w.entries.length > 0), tot = dayTotals(S, iso)
     const bits = [...ws.map(w => '✓ ' + w.name), ...(tot.meals ? [fmtNum(tot.kcal) + ' kcal · ' + fmtNum(tot.prot) + ' g'] : [])]
     return bits.length ? { iso, text: bits.join(' · ') } : null
   }
