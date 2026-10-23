@@ -7,7 +7,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://opengym-api.onrender.com/api/:path*"
+      "destination": "https://opengym-api-wotz.onrender.com/api/:path*"
     }
   ],
   "headers": [
