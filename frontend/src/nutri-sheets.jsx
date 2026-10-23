@@ -9,6 +9,8 @@ import { t } from './lib/i18n.js'
 import { goalsOf, NUTRI_DEF, dayLog, dayTotals, mealsOn, gymOn, runOn, balanceOf, nowHHMM, missedYesterday, MEAL_TYPES, mealTypeAt, mealTypeName, workoutMs, trainMsOn } from './lib/nutrition.js'
 import { effectiveRoutine, setsDone, setLabel } from './lib/history.js'
 import { EXIDX } from './lib/exercises.js'
+import { loadOfWorkouts, rankOf, MUSCLE_NAME } from './lib/muscles.js'
+import BodyMap from './components/BodyMap.jsx'
 import { nav } from './lib/nav.js'
 import { pickSurprise, markSeen } from './lib/fun.js'
 import { savePhoto, deletePhoto, usePhoto } from './lib/photos.js'
@@ -322,6 +324,9 @@ export function DayTraining({ iso }) {
   const log = dayLog(st, iso)
   const isToday = iso === todayISO()
   const total = trainMsOn(st, iso)
+  // The day's muscles, shaded the same way as the Stats map (relative to the day's hardest-worked)
+  const load = ws.length ? loadOfWorkouts(ws) : {}
+  const worked = rankOf(load).worked
   return <div className="card">
     <div className="row between" style={{ marginBottom: ws.length ? 10 : 6 }}>
       <h2 style={{ margin: 0 }}>{t('Training')}</h2>
@@ -341,6 +346,11 @@ export function DayTraining({ iso }) {
         </div>
       })}</div>
     </button>)}
+    {worked.length > 0 && <div className="nday-map">
+      <BodyMap className="bm-day" load={load} body={st.body} />
+      <div className="mchips">{worked.map(m => <span key={m} className="mchip">{t(MUSCLE_NAME[m])}</span>)}</div>
+    </div>}
+    {ws.length > 0 && !worked.length && <div className="small muted" style={{ marginTop: 6 }}>{t('No checked sets this day — check off your sets during a workout to see the muscles you worked.')}</div>}
     {!ws.length && (planned
       ? <div className="row between" style={{ gap: 10 }}>
           <div className="small muted">{t('Planned:')} <b style={{ color: 'var(--label)' }}>{planned.name}</b>{iso < todayISO() && <span className="dim"> · {t('Not done')}</span>}</div>

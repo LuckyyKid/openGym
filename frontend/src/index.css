@@ -969,6 +969,9 @@ h4.sec{
 .nwork-e .nm{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nmeal .v{text-align:right;line-height:1.35}
 .nmeal .v .dim{font-size:12px}
+.nday-map{margin-top:10px;padding-top:10px;border-top:var(--hair) solid var(--sep)}
+.bm-day .bm-v{max-height:min(32vh,220px)}
+.nday-map .mchips{justify-content:center;margin-top:8px}
 .nsplit{margin-top:12px;padding-top:10px;border-top:var(--hair) solid var(--sep)}
 .item .plan-lived{display:block;max-width:100%;text-align:left;color:var(--acc);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
