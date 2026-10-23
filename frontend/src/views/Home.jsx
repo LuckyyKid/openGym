@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
-import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
+import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive, doneWorkouts } from '../lib/history.js'
 import { fmtNum, fmtL, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor } from '../sheets.jsx'
@@ -84,7 +84,8 @@ export default function Home() {
   const delta = bw && prevBW ? bw.w - prevBW.w : null
 
   const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7) + weekOffset * 7)
-  const doneDays = new Set(S.workouts.map(w => w.d))
+  const done = doneWorkouts(S)
+  const doneDays = new Set(done.map(w => w.d))
   const strip = []
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday); d.setDate(monday.getDate() + i)
@@ -97,12 +98,13 @@ export default function Home() {
   const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6)
   const wkLabel = weekOffset === 0 ? t('This week') : `${monday.getDate()} ${monday.toLocaleDateString(dateLocale(), { month: 'short' })} – ${sunday.getDate()} ${sunday.toLocaleDateString(dateLocale(), { month: 'short' })}`
 
-  const wThisWeek = S.workouts.filter(w => weekKey(w.d) === weekKey(todayISO())).length
+  const wThisWeek = done.filter(w => weekKey(w.d) === weekKey(todayISO())).length
   const plannedPerWeek = Object.keys(S.week).filter(k => S.week[k]).length
   const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
 
   // today's session shown right under the week strip
-  const onToday = () => { if (S.active) nav('/workout'); else if (routine) startFlow(routine.id); else dayOverrideSheet(todayISO()) }
+  const doneToday = done.filter(w => w.d === todayISO())
+  const onToday = () => { if (S.active) nav('/workout'); else if (doneToday.length) nav('/nutrition'); else if (routine) startFlow(routine.id); else dayOverrideSheet(todayISO()) }
 
   return <div className="narrow">
     <div className="hdr">
@@ -119,15 +121,16 @@ export default function Home() {
       <div className="week">{strip}</div>
       <div className="today-row" onClick={onToday}>
         <div className="row" style={{ gap: 9, minWidth: 0 }}>
-          <span className="lrow-i" style={{ background: S.active ? 'var(--orange)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
-            <Icon name={S.active ? 'timer' : routine ? glyphOf(routine.emoji) : 'moon'} />
+          <span className="lrow-i" style={{ background: S.active ? 'var(--orange)' : routine || doneToday.length ? 'var(--acc)' : 'var(--surface-3)' }}>
+            <Icon name={S.active ? 'timer' : doneToday.length ? 'check' : routine ? glyphOf(routine.emoji) : 'moon'} />
           </span>
           <div style={{ minWidth: 0 }}>
             <div className="lbl2">{t('Today')}</div>
-            <div className="ttl">{S.active ? t('{0} — in progress', S.active.name) : routine ? routine.name : t('Rest day')}{todayOvr && routine ? ' · ' + t('rescheduled') : ''}</div>
+            <div className="ttl">{S.active ? t('{0} — in progress', S.active.name) : doneToday.length ? doneToday.map(w => w.name).join(', ') : routine ? routine.name : t('Rest day')}{todayOvr && routine && !doneToday.length ? ' · ' + t('rescheduled') : ''}</div>
           </div>
         </div>
         {S.active ? <span className="tag" style={{ color: 'var(--orange)', background: 'color-mix(in srgb,var(--orange) 16%,transparent)' }}>{t('Resume')}</span>
+          : doneToday.length ? <span className="tag acc"><Icon name="check" />{t('Done')}</span>
           : routine ? <span className="tag acc">{t('Start')}</span>
           : <Icon name="plus" className="chev" />}
       </div>
@@ -185,7 +188,7 @@ export default function Home() {
             {t('{0} week streak', streakWeeks(S))}
           </div>
           {streak.n > 1 && <div className="small" style={{ marginTop: 2, color: 'var(--orange)', fontWeight: 500 }}>{t('{0} days logged in a row', streak.n)}</div>}
-          <div className="muted small" style={{ marginTop: 2 }}>{wThisWeek}{plannedPerWeek ? ' / ' + plannedPerWeek : ''} {t('this week')} · {t(S.workouts.length === 1 ? '{0} workout total' : '{0} workouts total', S.workouts.length)}</div>
+          <div className="muted small" style={{ marginTop: 2 }}>{wThisWeek}{plannedPerWeek ? ' / ' + plannedPerWeek : ''} {t('this week')} · {t(done.length === 1 ? '{0} workout total' : '{0} workouts total', done.length)}</div>
         </div>
         <Icon name="calendar" className="chev" style={{ fontSize: 20 }} />
       </div>

@@ -8,7 +8,7 @@
 //   S.days   { iso: { water, gym, run, km, min, photo, notes } } — everything else about a day.
 // Both are absent on states written before nutrition existed and read as empty.
 import { isoOf, todayISO } from './format.js'
-import { effectiveRoutineId, lastBW } from './history.js'
+import { effectiveRoutineId, lastBW, isEmptyWorkout } from './history.js'
 
 export const NUTRI_DEF = { kcal: 2000, prot: 150, carb: 250, fat: 70, meals: 3, water: 2.5 }
 export const goalsOf = S => ({ ...NUTRI_DEF, ...(S.nutri || {}) })
@@ -47,8 +47,8 @@ export function dayTotals(S, iso) {
 }
 
 // A finished workout counts as a gym day on its own — ticking "gym" by hand is for sessions
-// trained outside the app.
-export const workoutsOn = (S, iso) => S.workouts.filter(w => w.d === iso)
+// trained outside the app. Empty workouts (nothing checked) don't count.
+export const workoutsOn = (S, iso) => S.workouts.filter(w => w.d === iso && !isEmptyWorkout(w))
 export const gymOn = (S, iso) => !!dayLog(S, iso).gym || workoutsOn(S, iso).length > 0
 export const runOn = (S, iso) => !!dayLog(S, iso).run
 

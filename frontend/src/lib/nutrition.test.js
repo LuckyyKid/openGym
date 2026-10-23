@@ -81,7 +81,7 @@ describe('missedYesterday', () => {
   })
   it('accepts a run or a hand-ticked gym day as training', () => {
     expect(missedYesterday({ ...S, days: { '2026-05-02': { run: true } } }, '2026-05-03')).toBeNull()
-    expect(gymOn({ ...S, workouts: [{ d: '2026-05-02', entries: [] }] }, '2026-05-02')).toBe(true)
+    expect(gymOn({ ...S, workouts: [{ d: '2026-05-02', entries: [{ id: 'x', sets: [{ done: true, w: 50, r: 5 }] }] }] }, '2026-05-02')).toBe(true)
   })
   it('stays quiet after a rest day', () => {
     expect(missedYesterday(S, '2026-05-04')).toBeNull()
@@ -101,13 +101,24 @@ describe('lastDays / periodSummary', () => {
     const m = (d, kcal, prot, carb, fat) => ({ id: d, d, time: '12:00', kcal, prot, carb, fat })
     const S = base({
       meals: [m('2026-05-01', 2600, 180, 300, 80), m('2026-05-02', 2000, 140, 200, 60)],
-      workouts: [{ id: 'w', d: '2026-05-01', start: 0, end: 75 * 60000, entries: [] }]
+      workouts: [{ id: 'w', d: '2026-05-01', start: 0, end: 75 * 60000, entries: [{ id: 'x', sets: [{ done: true, w: 50, r: 5 }] }] }]
     })
     expect(dayTotals(S, '2026-05-01')).toMatchObject({ carb: 300, fat: 80 })
     const p = periodSummary(S, 7, '2026-05-07')
     expect(p).toMatchObject({ avgCarb: 250, avgFat: 70, sessions: 1, trainMs: 75 * 60000 })
     expect(p.trainDays).toEqual({ days: 1, kcal: 2600, prot: 180 })
     expect(p.restDays).toEqual({ days: 1, kcal: 2000, prot: 140 })
+  })
+
+  it('leaves workouts with no checked set out of gym days, sessions and time trained', () => {
+    const S = base({ workouts: [
+      { id: 'a', d: '2026-05-01', start: 0, end: 30 * 60000, entries: [{ id: 'x', sets: [{ done: true, w: 50, r: 5 }] }] },
+      { id: 'b', d: '2026-05-02', start: 0, end: 20 * 60000, entries: [] },
+      { id: 'c', d: '2026-05-03', start: 0, end: 10 * 60000, entries: [{ id: 'x', sets: [{ done: false, w: 50, r: 5 }] }] }
+    ] })
+    expect(gymOn(S, '2026-05-02')).toBe(false)
+    expect(gymOn(S, '2026-05-03')).toBe(false)
+    expect(periodSummary(S, 7, '2026-05-07')).toMatchObject({ gymDays: 1, sessions: 1, trainMs: 30 * 60000 })
   })
 
   it('averages water over the days it was logged and counts days at the water goal', () => {

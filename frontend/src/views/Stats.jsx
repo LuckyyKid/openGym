@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { EXIDX } from '../lib/exercises.js'
-import { lastBW, streakWeeks, setLabel, modeOf, effortOf } from '../lib/history.js'
+import { lastBW, streakWeeks, setLabel, modeOf, effortOf, doneWorkouts } from '../lib/history.js'
 import { fmtNum, fmtL, fmtDur, fmtDate, fmtVol, todayISO, weekKey, DAYS } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor } from '../sheets.jsx'
@@ -204,7 +204,8 @@ export default function Stats() {
     .map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
   const bw30 = S.bodyweight.filter(b => (b.t || new Date(b.d).getTime()) > now - 30 * 86400000)
   const bwDelta30 = bw30.length > 1 ? bw30[bw30.length - 1].w - bw30[0].w : null
-  const monthW = S.workouts.filter(w => w.d.slice(0, 7) === todayISO().slice(0, 7)).length
+  const done = doneWorkouts(S)
+  const monthW = done.filter(w => w.d.slice(0, 7) === todayISO().slice(0, 7)).length
 
   const exHist = [...new Set(S.workouts.flatMap(w => w.entries.map(e => e.id)))].filter(id => EXIDX[id]).sort((a, b) => EXIDX[a].n < EXIDX[b].n ? -1 : 1)
   const curEx = exId && exHist.includes(exId) ? exId : exHist[0] || null
@@ -258,7 +259,7 @@ export default function Stats() {
       <button className="iconbtn" onClick={() => nav('/history')} aria-label={t('History')}><Icon name="history" /></button></div>
 
     <div className="tiles">
-      <div className="tile"><div className="l"><Icon name="dumbbell" />{t('Workouts')}</div><div className="v">{S.workouts.length}</div></div>
+      <div className="tile"><div className="l"><Icon name="dumbbell" />{t('Workouts')}</div><div className="v">{done.length}</div></div>
       <div className="tile"><div className="l"><Icon name="calendar" />{t('This month')}</div><div className="v">{monthW}</div></div>
       <div className="tile"><div className="l"><Icon name="flame" />{t('Week streak')}</div><div className="v">{streakWeeks(S)}</div></div>
       <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22, color: bwDelta30 === null ? 'inherit' : bwDeltaColor(bwDelta30, (lastBW(S) || {}).w || 0) }}>{bwDelta30 === null ? '—' : (bwDelta30 > 0 ? '+' : '') + fmtNum(bwDelta30) + ' ' + S.unit}</div></div>
@@ -266,7 +267,7 @@ export default function Stats() {
 
     <div className="card">
       <h2>{t('Activity — last 12 months')} <span className="dim" style={{ textTransform: 'none', letterSpacing: 0 }}>· {t('by time trained')}</span></h2>
-      <Heatmap S={S} onDay={iso => { const ws = S.workouts.filter(w => w.d === iso); if (ws.length === 1) workoutDetailSheet(ws[0]); else if (ws.length) calendarSheet(iso) }} />
+      <Heatmap S={{ ...S, workouts: done }} onDay={iso => { const ws = done.filter(w => w.d === iso); if (ws.length === 1) workoutDetailSheet(ws[0]); else if (ws.length) calendarSheet(iso) }} />
     </div>
 
     {((S.meals || []).length > 0 || Object.keys(S.days || {}).length > 0) && <NutritionStats S={S} />}

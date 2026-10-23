@@ -235,9 +235,15 @@ export function supersetUnits(items) {
 }
 export function unitOf(units, idx) { return units.find(u => u.includes(idx)) || [idx] }
 
+// "Finish anyway" with nothing checked saves a workout with no sets. It stays in the history
+// (so it can be opened and deleted) but is not a session: counts, streaks and stats skip it.
+export const isEmptyWorkout = w => !w.entries.some(e => e.sets.some(s => s.done))
+export const doneWorkouts = S => S.workouts.filter(w => !isEmptyWorkout(w))
+
 export function streakWeeks(S) {
-  if (!S.workouts.length) return 0
-  const weeks = new Set(S.workouts.map(w => weekKey(w.d)))
+  const ws = doneWorkouts(S)
+  if (!ws.length) return 0
+  const weeks = new Set(ws.map(w => weekKey(w.d)))
   let streak = 0
   const cur = new Date()
   for (let i = 0; i < 520; i++) {
