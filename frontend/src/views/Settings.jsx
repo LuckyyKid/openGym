@@ -13,7 +13,7 @@ import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
 import { loadStarterPlan, confirmSheet, importFromApp } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { goalsOf } from '../lib/nutrition.js'
-import { nutriGoalSheet, personalDatesSheet, motivationSheet } from '../nutri-sheets.jsx'
+import { nutriGoalSheet, FunSettings } from '../nutri-sheets.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
 
 export default function Settings() {
@@ -148,13 +148,7 @@ export default function Settings() {
         value={fmtGoals(S)} />
     </Section>
 
-    <Section title={t('Motivation')} footer={t('Confetti for streaks, little surprises on holidays and your own dates — at most one a day.')}>
-      <Row icon="sparkles" iconTint="var(--yellow)" title={t('Surprises & celebrations')}>
-        <Switch checked={!(S.fun || {}).off} onChange={v => update(s => { s.fun = { ...(s.fun || {}), off: !v } })} />
-      </Row>
-      <Row icon="gift" iconTint="var(--pink)" title={t('Your dates')} subtitle={t('Birthday and a special day')} accessory="chevron" onClick={personalDatesSheet} />
-      <Row icon="image" iconTint="var(--blue)" title={t('Motivation cards')} value={String((S.motivation || []).length)} accessory="chevron" onClick={motivationSheet} />
-    </Section>
+    <FunSettings />
 
     {(user || MOBILE) && <NotificationsCard S={S} update={update} toast={toast} />}
 

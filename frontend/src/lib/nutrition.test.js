@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dayTotals, balanceOf, surplusAlert, suggestionsFor, dayStreak, missedYesterday, lastDays, periodSummary, gymOn, ON_TARGET } from './nutrition.js'
+import { dayTotals, balanceOf, surplusAlert, suggestionsFor, dayStreak, missedYesterday, lastDays, periodSummary, gymOn, ON_TARGET, mealTypeAt, mealIdeas } from './nutrition.js'
 import { pickSurprise, markSeen, easterOf, GLOBAL_COOLDOWN, RANDOM_CHANCE } from './fun.js'
 
 const base = over => ({ unit: 'kg', bodyweight: [], routines: [], week: {}, dayPlan: {}, workouts: [], meals: [], days: {}, ...over })
@@ -95,6 +95,34 @@ describe('lastDays / periodSummary', () => {
     expect(ds.map(d => d.iso)).toEqual(['2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04', '2026-05-05', '2026-05-06', '2026-05-07'])
     const p = periodSummary(S, 7, '2026-05-07')
     expect(p).toMatchObject({ logged: 1, avgKcal: 2000, onTarget: 1, protHit: 1, runDays: 1, km: 5.5, gymDays: 0 })
+  })
+
+  it('averages water over the days it was logged and counts days at the water goal', () => {
+    const S = base({ nutri: { water: 2 }, days: { '2026-05-02': { water: 1 }, '2026-05-03': { water: 2.5 } } })
+    expect(periodSummary(S, 7, '2026-05-07')).toMatchObject({ avgWater: 1.75, waterHit: 1 })
+    expect(periodSummary(base(), 7, '2026-05-07').avgWater).toBe(null)
+  })
+})
+
+describe('meal types and ideas', () => {
+  it('guesses the meal type from the clock', () => {
+    expect(mealTypeAt('07:30')).toBe('breakfast')
+    expect(mealTypeAt('12:15')).toBe('lunch')
+    expect(mealTypeAt('19:00')).toBe('dinner')
+    expect(mealTypeAt('16:00')).toBe('snack')
+    expect(mealTypeAt('23:30')).toBe('snack')
+  })
+
+  it('picks the ideas closest to what is left per meal', () => {
+    const ideas = mealIdeas(550, 45)
+    expect(ideas).toHaveLength(3)
+    expect(ideas[0].name).toBe('Chicken, rice and vegetables')
+    expect(mealIdeas(0, 20)).toEqual([])
+  })
+
+  it('suggests ideas when under the goal', () => {
+    const S = base({ nutri: { kcal: 2000, prot: 150, meals: 3 }, meals: [meal('2026-05-01', '08:00', 400, 30)] })
+    expect(suggestionsFor(S, '2026-05-01').ideas.length).toBe(3)
   })
 })
 

@@ -4,16 +4,17 @@
 import { useRef, useState } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
-import { fmtDate, todayISO, isoOf, uid, MONTHS_LONG } from './lib/format.js'
+import { fmtDate, fmtNum, fmtL, todayISO, isoOf, uid, MONTHS_LONG } from './lib/format.js'
 import { t } from './lib/i18n.js'
-import { goalsOf, NUTRI_DEF, dayLog, dayTotals, gymOn, runOn, balanceOf, nowHHMM, missedYesterday } from './lib/nutrition.js'
+import { goalsOf, NUTRI_DEF, dayLog, dayTotals, mealsOn, workoutsOn, gymOn, runOn, balanceOf, nowHHMM, missedYesterday, MEAL_TYPES, mealTypeAt, mealTypeName } from './lib/nutrition.js'
 import { pickSurprise, markSeen } from './lib/fun.js'
 import { savePhoto, deletePhoto, usePhoto } from './lib/photos.js'
 import { reportHTML } from './lib/report.js'
 import { printHTML } from './lib/plan-share.js'
+import { MOBILE, shareExport } from './lib/mobile.js'
 import { confirmSheet, dayOverrideSheet } from './sheets.jsx'
 import Icon from './components/Icon.jsx'
-import { Button, Stepper, Switch, Segmented, Section, Row, TextField, TextArea, NumberField } from './components/ui.jsx'
+import { Button, Stepper, Switch, Segmented, Section, Row, TextField, TextArea, NumberField, SearchField } from './components/ui.jsx'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -58,12 +59,13 @@ function MealSheet({ iso, meal, close }) {
   const [time0] = useState(() => meal?.time || (iso === todayISO() ? nowHHMM() : '12:00'))
   const [h, setH] = useState(+time0.split(':')[0])
   const [m, setM] = useState(Math.round(+time0.split(':')[1] / 5) * 5 % 60)
+  const [type, setType] = useState(() => meal ? meal.type || null : mealTypeAt(time0))
   const [name, setName] = useState(meal?.name || '')
   const [kcal, setKcal] = useState(meal?.kcal ?? null)
   const [prot, setProt] = useState(meal?.prot ?? null)
   const save = () => {
     if (!kcal && !prot) { toast(t('Enter calories or protein')); return }
-    const rec = { d: iso, time: pad(h) + ':' + pad(m), name: name.trim(), kcal: Math.round(kcal || 0), prot: Math.round((prot || 0) * 10) / 10 }
+    const rec = { d: iso, time: pad(h) + ':' + pad(m), type, name: name.trim(), kcal: Math.round(kcal || 0), prot: Math.round((prot || 0) * 10) / 10 }
     update(s => {
       s.meals = s.meals || []
       if (meal) Object.assign(s.meals.find(x => x.id === meal.id) || {}, rec)
@@ -75,6 +77,8 @@ function MealSheet({ iso, meal, close }) {
   return <>
     <h3>{meal ? t('Edit meal') : t('Add meal')}</h3>
     <div className="muted small" style={{ marginBottom: 12 }}>{iso === todayISO() ? t('Today') : fmtDate(iso, true)}</div>
+    <Segmented className="seg-range" value={type} onChange={setType} options={MEAL_TYPES.map(x => ({ value: x.k, label: t(x.name) }))} />
+    <div style={{ height: 10 }} />
     <TextField placeholder={t('What did you eat? (optional)')} value={name} onChange={e => setName(e.target.value)} maxLength={80} />
     <div className="grid2" style={{ marginTop: 10 }}>
       <label className="nfield"><span>{t('Calories')}</span><span className="nfield-in"><NumberField value={kcal} nullable decimal={false} onChange={setKcal} placeholder="0" /><i>kcal</i></span></label>
@@ -145,7 +149,7 @@ function DaySheet({ iso, close }) {
 export const daySheet = iso => ui().openSheet(close => <DaySheet iso={iso} close={close} />, { locked: true })
 
 /* ============================ goals ============================ */
-function NutriGoals({ close }) {
+export function NutriGoals({ close = () => {} }) {
   const [g, setG] = useState(() => goalsOf(S()))
   const set = patch => setG(x => ({ ...x, ...patch }))
   return <>
@@ -166,7 +170,8 @@ function NutriGoals({ close }) {
 export const nutriGoalSheet = () => ui().openSheet(close => <NutriGoals close={close} />)
 
 /* ============================ calendar ============================ */
-function NutriCalendar({ start, onPick, close }) {
+const kShort = k => (k >= 1000 ? fmtNum(Math.round(k / 100) / 10) + 'k' : String(Math.round(k)))
+export function NutriCalendar({ start, onPick, close = () => {} }) {
   const st = useStore(s => s.S)
   const g = goalsOf(st)
   const [cur, setCur] = useState(() => { const d = new Date((start || todayISO()) + 'T12:00:00'); d.setDate(1); return d })
@@ -187,6 +192,7 @@ function NutriCalendar({ start, onPick, close }) {
     cells.push(<button key={d} disabled={future} className={'cal-d' + (iso === today ? ' today' : '') + (iso === start ? ' sel' : '') + (hit ? ' hit' : '')}
       onClick={() => { close(); onPick(iso) }}>
       <span>{d}</span>
+      {tot.meals > 0 && <span className={'cal-k ' + balanceOf(tot.kcal, g.kcal).status}>{kShort(tot.kcal)}</span>}
       <span className="cal-ic">{gym && <Icon name="dumbbell" style={{ color: 'var(--acc)' }} />}{run && <Icon name="figureRun" style={{ color: 'var(--orange)' }} />}</span>
     </button>)
   }
@@ -208,27 +214,131 @@ function NutriCalendar({ start, onPick, close }) {
 export const nutriCalendarSheet = (start, onPick) => ui().openSheet(close => <NutriCalendar start={start} onPick={onPick} close={close} />)
 
 /* ============================ report ============================ */
-function ReportSheet({ close }) {
+export function ReportSheet({ close = () => {} }) {
   const [range, setRange] = useState('7')
+  const [custom, setCustom] = useState(() => { const f = new Date(); f.setDate(f.getDate() - 13); return [isoOf(f), todayISO()] })
   const user = useStore(s => s.user)
   const rangeOf = r => {
+    if (r === 'custom') return custom[0] <= custom[1] ? custom : [custom[1], custom[0]]
     const now = new Date(), to = todayISO()
     if (r === 'month') return [isoOf(new Date(now.getFullYear(), now.getMonth(), 1)), to]
     if (r === 'last') return [isoOf(new Date(now.getFullYear(), now.getMonth() - 1, 1)), isoOf(new Date(now.getFullYear(), now.getMonth(), 0))]
     const f = new Date(); f.setDate(f.getDate() - (+r - 1)); return [isoOf(f), to]
   }
   const [from, to] = rangeOf(range)
-  const go = async () => { close(); printHTML(await reportHTML(S(), from, to, user?.name || '')) }
+  // The app's web view can't print, so on mobile the report goes out through the share sheet
+  // as an HTML file — open it in a browser and save it as a PDF from there.
+  const go = async () => {
+    close()
+    const html = await reportHTML(S(), from, to, user?.name || '')
+    if (MOBILE) shareExport(html, `opengym-report-${from}-${to}.html`).catch(() => toast(t('Could not share the report')))
+    else printHTML(html)
+  }
   return <>
     <h3>{t('Export report')}</h3>
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Daily summaries, every meal, cardio, notes and photos — print it or save it as a PDF.')}</div>
     <Segmented className="seg-range" value={range} onChange={setRange}
-      options={[{ value: '7', label: '7d' }, { value: '30', label: '30d' }, { value: 'month', label: t('This month') }, { value: 'last', label: t('Last month') }]} />
+      options={[{ value: '7', label: '7d' }, { value: '30', label: '30d' }, { value: 'month', label: t('This month') }, { value: 'last', label: t('Last month') }, { value: 'custom', label: t('Dates') }]} />
+    {range === 'custom' && <div className="grid2" style={{ marginTop: 10 }}>
+      <label className="nfield"><span>{t('From')}</span><TextField type="date" value={custom[0]} max={todayISO()} onChange={e => e.target.value && setCustom([e.target.value, custom[1]])} /></label>
+      <label className="nfield"><span>{t('To')}</span><TextField type="date" value={custom[1]} max={todayISO()} onChange={e => e.target.value && setCustom([custom[0], e.target.value])} /></label>
+    </div>}
     <div className="small dim" style={{ textAlign: 'center', margin: '4px 0 14px' }}>{fmtDate(from, true)} – {fmtDate(to, true)}</div>
-    <Button variant="primary" icon="download" onClick={go}>{t('Print / Save as PDF')}</Button>
+    <Button variant="primary" icon="download" onClick={go}>{MOBILE ? t('Share report') : t('Print / Save as PDF')}</Button>
   </>
 }
 export const reportSheet = () => ui().openSheet(close => <ReportSheet close={close} />)
+
+/* ============================ day detail ============================ */
+const typeOf = m => t(mealTypeName(m.type) || 'Meal')
+export function MealRow({ m, iso }) {
+  return <button className="nmeal" onClick={() => mealSheet(iso, m)}>
+    <span className="tm">{m.time}</span>
+    <span className="nm">{m.name || typeOf(m)}{m.name && m.type && <span className="dim"> · {typeOf(m)}</span>}</span>
+    <span className="v"><b>{fmtNum(m.kcal || 0)}</b> kcal · {fmtNum(m.prot || 0)} g</span>
+  </button>
+}
+
+// Read-only view of one day, opened from the calendar: what was eaten, drunk and trained,
+// with the photo and notes. Editing goes through the meal and day sheets.
+function DayDetail({ iso, close, onOpenDay }) {
+  const st = useStore(s => s.S)
+  const g = goalsOf(st)
+  const tot = dayTotals(st, iso)
+  const ms = mealsOn(st, iso)
+  const log = dayLog(st, iso)
+  const ws = workoutsOn(st, iso)
+  const bal = balanceOf(tot.kcal, g.kcal)
+  const tile = (icon, label, v, goal, color) => <div className="tile">
+    <div className="l"><Icon name={icon} />{label}</div>
+    <div className="v" style={{ fontSize: 19, color }}>{v}</div>
+    <div className="small dim">/ {goal}</div>
+  </div>
+  return <>
+    <h3 style={{ textTransform: 'capitalize' }}>{iso === todayISO() ? t('Today') : fmtDate(iso, true)}</h3>
+    <div className="tiles" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+      {tile('fork', t('Calories'), fmtNum(tot.kcal), fmtNum(g.kcal), tot.meals ? { over: 'var(--orange)', hit: 'var(--acc)', under: 'var(--blue)' }[bal.status] : undefined)}
+      {tile('bolt', t('Protein'), fmtNum(tot.prot) + ' g', fmtNum(g.prot) + ' g')}
+      {tile('drop', t('Water'), fmtL(tot.water) + ' L', fmtL(g.water) + ' L')}
+    </div>
+    <h4 className="sec">{t('Meals')}</h4>
+    {ms.length
+      ? <div className="nmeals">{ms.map(m => <MealRow key={m.id} m={m} iso={iso} />)}</div>
+      : <div className="small muted">{t('No meals logged for this day yet.')}</div>}
+    <h4 className="sec">{t('Activity')}</h4>
+    <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+      <span className={'tag nt' + (gymOn(st, iso) ? ' acc' : '')}><Icon name="dumbbell" />{ws.length ? ws.map(w => w.name).join(', ') : gymOn(st, iso) ? t('Gym') : t('No gym')}</span>
+      <span className="tag nt" style={log.run ? { color: 'var(--orange)', background: 'color-mix(in srgb,var(--orange) 16%,transparent)' } : undefined}>
+        <Icon name="figureRun" />{log.run ? [t('Cardio'), log.km ? fmtNum(log.km) + ' km' : '', log.min ? log.min + ' min' : ''].filter(Boolean).join(' · ') : t('No cardio')}
+      </span>
+    </div>
+    {log.photo && <><h4 className="sec">{t('Proof photo')}</h4><PhotoThumb id={log.photo} size={96} onClick={() => photoViewer(log.photo)} /></>}
+    {log.notes && <><h4 className="sec">{t('Notes')}</h4><div className="small muted" style={{ whiteSpace: 'pre-wrap' }}>{log.notes}</div></>}
+    <div style={{ height: 16 }} />
+    <div className="grid2">
+      <Button icon="plus" onClick={() => mealSheet(iso)}>{t('Meal')}</Button>
+      <Button icon="pencil" onClick={() => { close(); daySheet(iso) }}>{t('Edit day')}</Button>
+    </div>
+    {onOpenDay && <><div style={{ height: 8 }} /><Button variant="ghost" className="dim" onClick={() => { close(); onOpenDay(iso) }}>{t('Open this day')}</Button></>}
+  </>
+}
+export const dayDetailSheet = (iso, onOpenDay) => ui().openSheet(close => <DayDetail iso={iso} close={close} onOpenDay={onOpenDay} />)
+
+/* ============================ meal history ============================ */
+// Every meal ever logged, newest day first, filterable by type and searchable by name.
+export function MealHistory() {
+  const st = useStore(s => s.S)
+  const [type, setType] = useState('all')
+  const [q, setQ] = useState('')
+  const [limit, setLimit] = useState(30)
+  const needle = q.trim().toLowerCase()
+  const byDay = {}
+  ;(st.meals || []).forEach(m => {
+    if (type !== 'all' && m.type !== type) return
+    if (needle && !(m.name || '').toLowerCase().includes(needle)) return
+    ;(byDay[m.d] = byDay[m.d] || []).push(m)
+  })
+  const days = Object.keys(byDay).sort().reverse()
+  return <>
+    <SearchField placeholder={t('Search meals')} value={q} onChange={e => setQ(e.target.value)} onClear={() => setQ('')} />
+    <div className="chips" style={{ margin: '10px 0 12px' }}>
+      {[{ k: 'all', name: 'All' }, ...MEAL_TYPES].map(x => <button key={x.k} className={'chip nchip' + (type === x.k ? ' on' : '')} onClick={() => setType(x.k)}>{t(x.name)}</button>)}
+    </div>
+    {!days.length && <div className="card"><div className="small muted">{(st.meals || []).length ? t('No meals match.') : t('No meals logged yet.')}</div></div>}
+    {days.slice(0, limit).map(d => {
+      const list = byDay[d].sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0))
+      const kcal = list.reduce((a, m) => a + (+m.kcal || 0), 0), prot = list.reduce((a, m) => a + (+m.prot || 0), 0)
+      return <div key={d} className="card">
+        <button className="row between" style={{ width: '100%', marginBottom: 6 }} onClick={() => dayDetailSheet(d)}>
+          <b style={{ textTransform: 'capitalize' }}>{d === todayISO() ? t('Today') : fmtDate(d, true)}</b>
+          <span className="small muted">{fmtNum(kcal)} kcal · {fmtNum(prot)} g</span>
+        </button>
+        <div className="nmeals">{list.map(m => <MealRow key={m.id} m={m} iso={d} />)}</div>
+      </div>
+    })}
+    {days.length > limit && <Button variant="ghost" onClick={() => setLimit(l => l + 30)}>{t('Show more')}</Button>}
+  </>
+}
 
 /* ============================ surprises ============================ */
 function Surprise({ pick, close }) {
@@ -350,3 +460,16 @@ function MotivationManager() {
   </>
 }
 export const motivationSheet = () => ui().openSheet(() => <MotivationManager />)
+
+/* ============================ motivation settings ============================ */
+// Shared by Settings and the Nutrition page's settings section.
+export function FunSettings() {
+  const st = useStore(s => s.S)
+  return <Section title={t('Motivation')} footer={t('Confetti for streaks, little surprises on holidays and your own dates — at most one a day.')}>
+    <Row icon="sparkles" iconTint="var(--yellow)" title={t('Surprises & celebrations')}>
+      <Switch checked={!(st.fun || {}).off} onChange={v => update(s => { s.fun = { ...(s.fun || {}), off: !v } })} />
+    </Row>
+    <Row icon="gift" iconTint="var(--pink)" title={t('Your dates')} subtitle={t('Birthday and a special day')} accessory="chevron" onClick={personalDatesSheet} />
+    <Row icon="image" iconTint="var(--blue)" title={t('Motivation cards')} value={String((st.motivation || []).length)} accessory="chevron" onClick={motivationSheet} />
+  </Section>
+}

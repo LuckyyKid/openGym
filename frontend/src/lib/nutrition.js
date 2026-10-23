@@ -1,7 +1,7 @@
 // Nutrition + daily log — pure helpers over the state object S.
 //
 // Two stores, one job each, so they can never disagree:
-//   S.meals  [{ id, d, time, name, kcal, prot }]  — the ONLY source of calories and protein.
+//   S.meals  [{ id, d, time, type, name, kcal, prot }]  — the ONLY source of calories and protein.
 //            A day's totals are always the sum of its meals; there is no hand-typed daily
 //            total that could drift away from the list.
 //   S.days   { iso: { water, gym, run, km, min, photo, notes } } — everything else about a day.
@@ -15,6 +15,23 @@ export const goalsOf = S => ({ ...NUTRI_DEF, ...(S.nutri || {}) })
 export const mealsOn = (S, iso) =>
   (S.meals || []).filter(m => m.d === iso).sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0))
 export const dayLog = (S, iso) => (S.days && S.days[iso]) || {}
+
+// Meal types. Meals logged before types existed have none and simply show without one.
+export const MEAL_TYPES = [
+  { k: 'breakfast', name: 'Breakfast' },
+  { k: 'lunch', name: 'Lunch' },
+  { k: 'dinner', name: 'Dinner' },
+  { k: 'snack', name: 'Snack' }
+]
+export const mealTypeName = k => (MEAL_TYPES.find(x => x.k === k) || {}).name || null
+// A sensible default from the clock; the sheet lets you change it.
+export function mealTypeAt(time) {
+  const [h, m] = time.split(':').map(Number), t = h * 60 + m
+  if (t >= 300 && t < 630) return 'breakfast'
+  if (t >= 690 && t < 870) return 'lunch'
+  if (t >= 1050 && t < 1320) return 'dinner'
+  return 'snack'
+}
 
 export function dayTotals(S, iso) {
   const ms = mealsOn(S, iso)
@@ -95,9 +112,36 @@ export function suggestionsFor(S, iso) {
     const kcalLeft = -diff
     const protLeft = Math.max(0, Math.round(g.prot - tot.prot))
     const n = Math.max(1, left)
-    return { kind: 'under', kcal: kcalLeft, prot: protLeft, meals: n, perMeal: Math.round(kcalLeft / n / 10) * 10, protPerMeal: Math.round(protLeft / n) }
+    const perMeal = Math.round(kcalLeft / n / 10) * 10, protPerMeal = Math.round(protLeft / n)
+    return { kind: 'under', kcal: kcalLeft, prot: protLeft, meals: n, perMeal, protPerMeal, ideas: mealIdeas(perMeal, protPerMeal) }
   }
   return { kind: 'hit' }
+}
+
+// Everyday meals with rough values per portion. mealIdeas() picks the ones closest to what is
+// left per meal, protein weighted almost as much as calories.
+export const MEAL_IDEAS = [
+  { name: 'Greek yogurt with berries', kcal: 180, prot: 18 },
+  { name: 'Cottage cheese and fruit', kcal: 200, prot: 24 },
+  { name: 'Two boiled eggs on toast', kcal: 250, prot: 16 },
+  { name: 'Protein shake with milk', kcal: 250, prot: 30 },
+  { name: 'A handful of nuts and an apple', kcal: 280, prot: 7 },
+  { name: 'Three-egg cheese omelette', kcal: 350, prot: 26 },
+  { name: 'Tuna sandwich on whole wheat', kcal: 380, prot: 30 },
+  { name: 'Turkey wrap', kcal: 420, prot: 32 },
+  { name: 'Oatmeal with whey and banana', kcal: 420, prot: 30 },
+  { name: 'Beef chili', kcal: 480, prot: 35 },
+  { name: 'Tofu stir-fry with noodles', kcal: 500, prot: 26 },
+  { name: 'Lentil curry with rice', kcal: 520, prot: 24 },
+  { name: 'Chicken, rice and vegetables', kcal: 550, prot: 45 },
+  { name: 'Salmon, potatoes and green beans', kcal: 600, prot: 38 },
+  { name: 'Steak, sweet potato and salad', kcal: 650, prot: 48 },
+  { name: 'Pasta bolognese', kcal: 700, prot: 38 }
+]
+export function mealIdeas(kcal, prot, n = 3) {
+  if (kcal <= 0) return []
+  const score = f => Math.abs(f.kcal - kcal) / kcal + 0.8 * Math.abs(f.prot - prot) / Math.max(prot, 15)
+  return MEAL_IDEAS.slice().sort((a, b) => score(a) - score(b)).slice(0, n)
 }
 
 /* ---------------------------- streaks & days ---------------------------- */
@@ -153,6 +197,7 @@ export function periodSummary(S, n, today = todayISO()) {
   const g = goalsOf(S)
   const days = lastDays(S, n, today)
   const withMeals = days.filter(d => d.meals > 0)
+  const withWater = days.filter(d => d.water > 0)
   const avg = k => (withMeals.length ? Math.round(withMeals.reduce((a, d) => a + d[k], 0) / withMeals.length) : null)
   return {
     days,
@@ -161,6 +206,9 @@ export function periodSummary(S, n, today = todayISO()) {
     avgProt: avg('prot'),
     onTarget: withMeals.filter(d => balanceOf(d.kcal, g.kcal).status === 'hit').length,
     protHit: withMeals.filter(d => d.prot >= g.prot).length,
+    // water is averaged over the days it was logged, like calories over days with meals
+    avgWater: withWater.length ? Math.round(withWater.reduce((a, d) => a + d.water, 0) / withWater.length * 100) / 100 : null,
+    waterHit: days.filter(d => d.water >= g.water).length,
     gymDays: days.filter(d => d.gym).length,
     runDays: days.filter(d => d.run).length,
     km: Math.round(days.reduce((a, d) => a + d.km, 0) * 10) / 10

@@ -3,7 +3,7 @@
 // names, notes, cardio distance/time and the proof photos are all in it.
 import { isoOf, fmtDate, fmtNum, fmtL, durPart } from './format.js'
 import { t } from './i18n.js'
-import { goalsOf, mealsOn, dayTotals, dayLog, workoutsOn, gymOn, runOn, balanceOf } from './nutrition.js'
+import { goalsOf, mealsOn, dayTotals, dayLog, workoutsOn, gymOn, runOn, balanceOf, mealTypeName } from './nutrition.js'
 import { photoData } from './photos.js'
 
 const esc = str => String(str == null ? '' : str)
@@ -25,6 +25,8 @@ export async function reportHTML(S, from, to, owner) {
   const tot = days.map(iso => ({ iso, ...dayTotals(S, iso) }))
   const fed = tot.filter(d => d.meals)
   const avg = k => (fed.length ? Math.round(fed.reduce((a, d) => a + d[k], 0) / fed.length) : null)
+  const wet = tot.filter(d => d.water > 0)
+  const avgWater = wet.length ? wet.reduce((a, d) => a + d.water, 0) / wet.length : null
   const gymN = days.filter(iso => gymOn(S, iso)).length
   const runs = days.filter(iso => runOn(S, iso))
   const km = runs.reduce((a, iso) => a + (+dayLog(S, iso).km || 0), 0)
@@ -35,6 +37,8 @@ export async function reportHTML(S, from, to, owner) {
     ${tile(t('Days with meals'), fed.length)}
     ${tile(t('Avg. calories'), avg('kcal') == null ? '—' : fmtNum(avg('kcal')) + ' kcal')}
     ${tile(t('Avg. protein'), avg('prot') == null ? '—' : fmtNum(avg('prot')) + ' g')}
+    ${tile(t('Avg. water'), avgWater == null ? '—' : fmtL(avgWater) + ' L')}
+    ${tile(t('Water goal hit'), tot.filter(d => d.water >= g.water).length + ' / ' + days.length)}
     ${tile(t('Gym days'), gymN)}
     ${tile(t('Cardio'), runs.length + (km ? ' · ' + fmtNum(km) + ' km' : ''))}
   </div>`
@@ -51,7 +55,7 @@ export async function reportHTML(S, from, to, owner) {
     if (ws.length) acts.push(ws.map(w => esc(w.name) + (durPart(w.end - w.start).length ? ' (' + durPart(w.end - w.start)[0] + ')' : '')).join(', '))
     else if (log.gym) acts.push(esc(t('Gym')))
     if (log.run) acts.push(esc(t('Cardio')) + [log.km ? fmtNum(log.km) + ' km' : '', log.min ? log.min + ' min' : ''].filter(Boolean).map(x => ' · ' + x).join(''))
-    const rows = ms.map(m => `<tr><td class="tm">${esc(m.time)}</td><td>${esc(m.name || t('Meal'))}</td><td class="n">${fmtNum(m.kcal || 0)} kcal</td><td class="n">${fmtNum(m.prot || 0)} g</td></tr>`).join('')
+    const rows = ms.map(m => `<tr><td class="tm">${esc(m.time)}</td><td>${esc(m.name || t(mealTypeName(m.type) || 'Meal'))}${m.name && m.type ? ` <span class="ty">· ${esc(t(mealTypeName(m.type)))}</span>` : ''}</td><td class="n">${fmtNum(m.kcal || 0)} kcal</td><td class="n">${fmtNum(m.prot || 0)} g</td></tr>`).join('')
     const img = log.photo && photos[log.photo] ? `<img class="ph" src="${photos[log.photo]}" alt="">` : ''
     return `<section class="day">
       <div class="d-head"><h2>${esc(fmtDate(iso, true))}</h2><span class="bal ${bal.status}">${esc(balTxt)}</span></div>
@@ -79,7 +83,7 @@ export async function reportHTML(S, from, to, owner) {
   header .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #6a7a3a; font-weight: 700; }
   header h1 { font-size: 27px; letter-spacing: -.02em; margin: 3px 0 0; }
   header .sub { color: #6b7180; font-size: 13px; margin-top: 4px; }
-  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 22px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 22px; }
   .tile { border: 1px solid #e4e6ec; border-radius: 10px; padding: 9px 12px; }
   .tile .l { font-size: 11px; color: #8a90a0; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
   .tile .v { font-size: 18px; font-weight: 600; }
@@ -92,7 +96,7 @@ export async function reportHTML(S, from, to, owner) {
   .acts { margin-top: 6px; font-size: 13px; }
   table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
   td { padding: 4px 0; border-top: 1px solid #f2f3f6; vertical-align: top; }
-  td.tm { width: 52px; color: #8a90a0; } td.n { text-align: right; white-space: nowrap; padding-left: 12px; }
+  td.tm { width: 52px; color: #8a90a0; } .ty { color: #8a90a0; } td.n { text-align: right; white-space: nowrap; padding-left: 12px; }
   .notes { margin-top: 8px; padding: 8px 10px; background: #f6f7f9; border-radius: 8px; font-size: 13px; white-space: pre-wrap; }
   .ph { display: block; margin-top: 8px; max-width: 220px; max-height: 220px; border-radius: 8px; object-fit: cover; }
   .none { color: #a2a8b6; }
