@@ -8,8 +8,8 @@ const meal = (d, time, kcal, prot = 0) => ({ id: d + time, d, time, name: 'x', k
 describe('dayTotals', () => {
   it('sums only the meals of that day — the meals are the single source of totals', () => {
     const S = base({ meals: [meal('2026-05-01', '08:00', 500, 30), meal('2026-05-01', '13:00', 700, 40), meal('2026-05-02', '08:00', 999, 99)], days: { '2026-05-01': { water: 1.5 } } })
-    expect(dayTotals(S, '2026-05-01')).toEqual({ kcal: 1200, prot: 70, meals: 2, water: 1.5 })
-    expect(dayTotals(S, '2026-05-03')).toEqual({ kcal: 0, prot: 0, meals: 0, water: 0 })
+    expect(dayTotals(S, '2026-05-01')).toEqual({ kcal: 1200, prot: 70, carb: 0, fat: 0, meals: 2, water: 1.5 })
+    expect(dayTotals(S, '2026-05-03')).toEqual({ kcal: 0, prot: 0, carb: 0, fat: 0, meals: 0, water: 0 })
   })
 })
 
@@ -95,6 +95,19 @@ describe('lastDays / periodSummary', () => {
     expect(ds.map(d => d.iso)).toEqual(['2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04', '2026-05-05', '2026-05-06', '2026-05-07'])
     const p = periodSummary(S, 7, '2026-05-07')
     expect(p).toMatchObject({ logged: 1, avgKcal: 2000, onTarget: 1, protHit: 1, runDays: 1, km: 5.5, gymDays: 0 })
+  })
+
+  it('sums carbs and fat, and splits training days from rest days', () => {
+    const m = (d, kcal, prot, carb, fat) => ({ id: d, d, time: '12:00', kcal, prot, carb, fat })
+    const S = base({
+      meals: [m('2026-05-01', 2600, 180, 300, 80), m('2026-05-02', 2000, 140, 200, 60)],
+      workouts: [{ id: 'w', d: '2026-05-01', start: 0, end: 75 * 60000, entries: [] }]
+    })
+    expect(dayTotals(S, '2026-05-01')).toMatchObject({ carb: 300, fat: 80 })
+    const p = periodSummary(S, 7, '2026-05-07')
+    expect(p).toMatchObject({ avgCarb: 250, avgFat: 70, sessions: 1, trainMs: 75 * 60000 })
+    expect(p.trainDays).toEqual({ days: 1, kcal: 2600, prot: 180 })
+    expect(p.restDays).toEqual({ days: 1, kcal: 2000, prot: 140 })
   })
 
   it('averages water over the days it was logged and counts days at the water goal', () => {

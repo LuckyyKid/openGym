@@ -1,7 +1,8 @@
 // Nutrition + daily log — pure helpers over the state object S.
 //
 // Two stores, one job each, so they can never disagree:
-//   S.meals  [{ id, d, time, type, name, kcal, prot }]  — the ONLY source of calories and protein.
+//   S.meals  [{ id, d, time, type, name, kcal, prot, carb, fat }]  — the ONLY source of calories
+//            and macros (carb/fat are absent on meals logged before they existed and read as 0).
 //            A day's totals are always the sum of its meals; there is no hand-typed daily
 //            total that could drift away from the list.
 //   S.days   { iso: { water, gym, run, km, min, photo, notes } } — everything else about a day.
@@ -9,7 +10,7 @@
 import { isoOf, todayISO } from './format.js'
 import { effectiveRoutineId, lastBW } from './history.js'
 
-export const NUTRI_DEF = { kcal: 2000, prot: 150, meals: 3, water: 2.5 }
+export const NUTRI_DEF = { kcal: 2000, prot: 150, carb: 250, fat: 70, meals: 3, water: 2.5 }
 export const goalsOf = S => ({ ...NUTRI_DEF, ...(S.nutri || {}) })
 
 export const mealsOn = (S, iso) =>
@@ -38,6 +39,8 @@ export function dayTotals(S, iso) {
   return {
     kcal: ms.reduce((a, m) => a + (+m.kcal || 0), 0),
     prot: ms.reduce((a, m) => a + (+m.prot || 0), 0),
+    carb: ms.reduce((a, m) => a + (+m.carb || 0), 0),
+    fat: ms.reduce((a, m) => a + (+m.fat || 0), 0),
     meals: ms.length,
     water: +dayLog(S, iso).water || 0
   }
@@ -48,6 +51,10 @@ export function dayTotals(S, iso) {
 export const workoutsOn = (S, iso) => S.workouts.filter(w => w.d === iso)
 export const gymOn = (S, iso) => !!dayLog(S, iso).gym || workoutsOn(S, iso).length > 0
 export const runOn = (S, iso) => !!dayLog(S, iso).run
+
+// Time trained in the app on a day, from the workouts' own start/end.
+export const workoutMs = w => Math.max(0, (w.end || w.start) - w.start)
+export const trainMsOn = (S, iso) => workoutsOn(S, iso).reduce((a, w) => a + workoutMs(w), 0)
 
 // Within this many kcal of the goal reads as "on target" — nobody eats to the exact calorie,
 // and an exact-equality check would almost never fire.
@@ -187,7 +194,8 @@ export function lastDays(S, n, today = todayISO()) {
   const d = new Date(today + 'T12:00:00'); d.setDate(d.getDate() - (n - 1))
   for (let i = 0; i < n; i++) {
     const iso = isoOf(d)
-    out.push({ iso, ...dayTotals(S, iso), gym: gymOn(S, iso), run: runOn(S, iso), km: runOn(S, iso) ? +dayLog(S, iso).km || 0 : 0 })
+    out.push({ iso, ...dayTotals(S, iso), gym: gymOn(S, iso), run: runOn(S, iso), km: runOn(S, iso) ? +dayLog(S, iso).km || 0 : 0,
+      sessions: workoutsOn(S, iso).length, trainMs: trainMsOn(S, iso) })
     d.setDate(d.getDate() + 1)
   }
   return out
@@ -199,11 +207,15 @@ export function periodSummary(S, n, today = todayISO()) {
   const withMeals = days.filter(d => d.meals > 0)
   const withWater = days.filter(d => d.water > 0)
   const avg = k => (withMeals.length ? Math.round(withMeals.reduce((a, d) => a + d[k], 0) / withMeals.length) : null)
+  // What you eat on days you train against days you don't — only days with meals count.
+  const split = list => list.length ? { days: list.length, kcal: Math.round(list.reduce((a, d) => a + d.kcal, 0) / list.length), prot: Math.round(list.reduce((a, d) => a + d.prot, 0) / list.length) } : null
   return {
     days,
     logged: withMeals.length,
     avgKcal: avg('kcal'),
     avgProt: avg('prot'),
+    avgCarb: avg('carb'),
+    avgFat: avg('fat'),
     onTarget: withMeals.filter(d => balanceOf(d.kcal, g.kcal).status === 'hit').length,
     protHit: withMeals.filter(d => d.prot >= g.prot).length,
     // water is averaged over the days it was logged, like calories over days with meals
@@ -211,6 +223,10 @@ export function periodSummary(S, n, today = todayISO()) {
     waterHit: days.filter(d => d.water >= g.water).length,
     gymDays: days.filter(d => d.gym).length,
     runDays: days.filter(d => d.run).length,
+    sessions: days.reduce((a, d) => a + d.sessions, 0),
+    trainMs: days.reduce((a, d) => a + d.trainMs, 0),
+    trainDays: split(withMeals.filter(d => d.gym || d.run)),
+    restDays: split(withMeals.filter(d => !d.gym && !d.run)),
     km: Math.round(days.reduce((a, d) => a + d.km, 0) * 10) / 10
   }
 }

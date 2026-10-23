@@ -1,9 +1,9 @@
 // Printable nutrition & activity report for a date range (browser print → Save as PDF),
 // built the same way as the plan printout in plan-share.js. Nothing is cut short: full meal
 // names, notes, cardio distance/time and the proof photos are all in it.
-import { isoOf, fmtDate, fmtNum, fmtL, durPart } from './format.js'
+import { isoOf, fmtDate, fmtNum, fmtL, fmtDur, durPart } from './format.js'
 import { t } from './i18n.js'
-import { goalsOf, mealsOn, dayTotals, dayLog, workoutsOn, gymOn, runOn, balanceOf, mealTypeName } from './nutrition.js'
+import { goalsOf, mealsOn, dayTotals, dayLog, workoutsOn, gymOn, runOn, balanceOf, mealTypeName, trainMsOn } from './nutrition.js'
 import { photoData } from './photos.js'
 
 const esc = str => String(str == null ? '' : str)
@@ -39,6 +39,9 @@ export async function reportHTML(S, from, to, owner) {
     ${tile(t('Avg. protein'), avg('prot') == null ? '—' : fmtNum(avg('prot')) + ' g')}
     ${tile(t('Avg. water'), avgWater == null ? '—' : fmtL(avgWater) + ' L')}
     ${tile(t('Water goal hit'), tot.filter(d => d.water >= g.water).length + ' / ' + days.length)}
+    ${tile(t('Avg. carbs'), avg('carb') == null ? '—' : fmtNum(avg('carb')) + ' g')}
+    ${tile(t('Avg. fat'), avg('fat') == null ? '—' : fmtNum(avg('fat')) + ' g')}
+    ${tile(t('Time trained'), (ms => ms >= 60000 ? fmtDur(ms) : '—')(days.reduce((a, iso) => a + trainMsOn(S, iso), 0)))}
     ${tile(t('Gym days'), gymN)}
     ${tile(t('Cardio'), runs.length + (km ? ' · ' + fmtNum(km) + ' km' : ''))}
   </div>`
@@ -55,13 +58,15 @@ export async function reportHTML(S, from, to, owner) {
     if (ws.length) acts.push(ws.map(w => esc(w.name) + (durPart(w.end - w.start).length ? ' (' + durPart(w.end - w.start)[0] + ')' : '')).join(', '))
     else if (log.gym) acts.push(esc(t('Gym')))
     if (log.run) acts.push(esc(t('Cardio')) + [log.km ? fmtNum(log.km) + ' km' : '', log.min ? log.min + ' min' : ''].filter(Boolean).map(x => ' · ' + x).join(''))
-    const rows = ms.map(m => `<tr><td class="tm">${esc(m.time)}</td><td>${esc(m.name || t(mealTypeName(m.type) || 'Meal'))}${m.name && m.type ? ` <span class="ty">· ${esc(t(mealTypeName(m.type)))}</span>` : ''}</td><td class="n">${fmtNum(m.kcal || 0)} kcal</td><td class="n">${fmtNum(m.prot || 0)} g</td></tr>`).join('')
+    const rows = ms.map(m => `<tr><td class="tm">${esc(m.time)}</td><td>${esc(m.name || t(mealTypeName(m.type) || 'Meal'))}${m.name && m.type ? ` <span class="ty">· ${esc(t(mealTypeName(m.type)))}</span>` : ''}</td><td class="n">${fmtNum(m.kcal || 0)} kcal</td><td class="n">${fmtNum(m.prot || 0)} P · ${fmtNum(m.carb || 0)} ${esc(t('C'))} · ${fmtNum(m.fat || 0)} ${esc(t('F'))}</td></tr>`).join('')
     const img = log.photo && photos[log.photo] ? `<img class="ph" src="${photos[log.photo]}" alt="">` : ''
     return `<section class="day">
       <div class="d-head"><h2>${esc(fmtDate(iso, true))}</h2><span class="bal ${bal.status}">${esc(balTxt)}</span></div>
       <div class="facts">
         <span><b>${fmtNum(d.kcal)}</b> / ${fmtNum(g.kcal)} kcal</span>
         <span><b>${fmtNum(d.prot)}</b> / ${fmtNum(g.prot)} g ${esc(t('protein'))}</span>
+        <span><b>${fmtNum(d.carb)}</b> / ${fmtNum(g.carb)} g ${esc(t('carbs'))}</span>
+        <span><b>${fmtNum(d.fat)}</b> / ${fmtNum(g.fat)} g ${esc(t('fat'))}</span>
         <span><b>${fmtL(d.water)}</b> L ${esc(t('water'))}</span>
       </div>
       ${acts.length ? `<div class="acts">${acts.join(' · ')}</div>` : ''}

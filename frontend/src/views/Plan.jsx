@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
-import { DAYN, uid, exCount } from '../lib/format.js'
+import { DAYN, uid, exCount, fmtNum, isoOf, todayISO } from '../lib/format.js'
+import { dayTotals, workoutsOn } from '../lib/nutrition.js'
 import { t } from '../lib/i18n.js'
 import { dayAssignSheet, loadStarterPlan, planToolsSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
@@ -18,6 +19,18 @@ export default function Plan() {
     nav('/plan/r/' + r.id)
   }
 
+  // Dates of this week (Monday first), so a day already lived can show what happened on it.
+  const today = todayISO()
+  const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+  const isoThisWeek = d => { const x = new Date(monday); x.setDate(monday.getDate() + ((d + 6) % 7)); return isoOf(x) }
+  const lived = d => {
+    const iso = isoThisWeek(d)
+    if (iso > today) return null
+    const ws = workoutsOn(S, iso), tot = dayTotals(S, iso)
+    const bits = [...ws.map(w => '✓ ' + w.name), ...(tot.meals ? [fmtNum(tot.kcal) + ' kcal · ' + fmtNum(tot.prot) + ' g'] : [])]
+    return bits.length ? { iso, text: bits.join(' · ') } : null
+  }
+
   return <>
     <div className="hdr">
       <div><h1>{t('Plan')}</h1><div className="sub">{t('Your weekly routine')}</div></div>
@@ -28,8 +41,10 @@ export default function Plan() {
       <div className="list" style={{ display: 'flex', flexDirection: 'column' }}>
         {[1, 2, 3, 4, 5, 6, 0].map(d => {
           const r = S.routines.find(x => x.id === S.week[d])
+          const day = lived(d)
           return <div key={d} className="item" onClick={() => dayAssignSheet(d)}>
-            <div className="grow"><div className="tt">{t(DAYN[d])}</div></div>
+            <div className="grow" style={{ minWidth: 0 }}><div className="tt">{t(DAYN[d])}</div>
+              {day && <button className="ss plan-lived" onClick={e => { e.stopPropagation(); nav('/nutrition?d=' + day.iso) }}>{day.text}</button>}</div>
             {r ? <span className="tag acc"><Icon name={glyphOf(r.emoji)} />{r.name}</span> : <span className="tag">{t('Rest')}</span>}
             <Icon name="chevronRight" className="chev" /></div>
         })}

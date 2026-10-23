@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { EXIDX } from '../lib/exercises.js'
 import { lastBW, streakWeeks, setLabel, modeOf, effortOf } from '../lib/history.js'
-import { fmtNum, fmtL, fmtDate, fmtVol, todayISO, weekKey, DAYS } from '../lib/format.js'
+import { fmtNum, fmtL, fmtDur, fmtDate, fmtVol, todayISO, weekKey, DAYS } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
@@ -32,7 +32,7 @@ export function NutritionStats({ S, inline }) {
   const col = d => !d.meals ? 'var(--surface-2)' : { over: 'var(--orange)', hit: 'var(--acc)', under: 'var(--blue)' }[balanceOf(d.kcal, g.kcal).status]
   return <div className="card">
     <div className="row between" style={{ marginBottom: 8 }}>
-      <h2 style={{ margin: 0 }}>{t('Nutrition')}</h2>
+      <h2 style={{ margin: 0 }}>{t('Nutrition & training')}</h2>
       {!inline && <Button size="sm" variant="ghost" trailingIcon="chevronRight" onClick={() => nav('/nutrition')}>{t('Open')}</Button>}
     </div>
     <Segmented className="seg-range" value={win} onChange={setWin}
@@ -50,13 +50,26 @@ export function NutritionStats({ S, inline }) {
     <div className="tiles" style={{ marginTop: 12, marginBottom: 0 }}>
       <div className="tile"><div className="l"><Icon name="fork" />{t('Avg. calories')}</div><div className="v" style={{ fontSize: 22 }}>{p.avgKcal == null ? '—' : fmtNum(p.avgKcal)}</div></div>
       <div className="tile"><div className="l"><Icon name="bolt" />{t('Avg. protein')}</div><div className="v" style={{ fontSize: 22 }}>{p.avgProt == null ? '—' : fmtNum(p.avgProt) + ' g'}</div></div>
+      <div className="tile"><div className="l"><Icon name="flame" />{t('Avg. carbs')}</div><div className="v" style={{ fontSize: 22 }}>{p.avgCarb == null ? '—' : fmtNum(p.avgCarb) + ' g'}</div></div>
+      <div className="tile"><div className="l"><Icon name="drop" />{t('Avg. fat')}</div><div className="v" style={{ fontSize: 22 }}>{p.avgFat == null ? '—' : fmtNum(p.avgFat) + ' g'}</div></div>
       <div className="tile"><div className="l"><Icon name="target" />{t('On target')}</div><div className="v" style={{ fontSize: 22 }}>{p.onTarget} / {p.logged}</div></div>
       <div className="tile"><div className="l"><Icon name="check" />{t('Protein goal hit')}</div><div className="v" style={{ fontSize: 22 }}>{p.protHit} / {p.logged}</div></div>
       <div className="tile"><div className="l"><Icon name="drop" />{t('Avg. water')}</div><div className="v" style={{ fontSize: 22 }}>{p.avgWater == null ? '—' : fmtL(p.avgWater) + ' L'}</div></div>
       <div className="tile"><div className="l"><Icon name="drop" />{t('Water goal hit')}</div><div className="v" style={{ fontSize: 22 }}>{p.waterHit} / {n}</div></div>
       <div className="tile"><div className="l"><Icon name="dumbbell" />{t('Gym days')}</div><div className="v" style={{ fontSize: 22 }}>{p.gymDays} / {n}</div></div>
+      <div className="tile"><div className="l"><Icon name="clipboard" />{t('Sessions')}</div><div className="v" style={{ fontSize: 22 }}>{p.sessions}</div></div>
+      <div className="tile"><div className="l"><Icon name="timer" />{t('Time trained')}</div><div className="v" style={{ fontSize: 22 }}>{p.trainMs >= 60000 ? fmtDur(p.trainMs) : '—'}</div></div>
       <div className="tile"><div className="l"><Icon name="figureRun" />{t('Cardio')}</div><div className="v" style={{ fontSize: 22 }}>{p.runDays}{p.km ? <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> · {fmtNum(p.km)} km</span> : ''}</div></div>
     </div>
+    {(p.trainDays || p.restDays) && <div className="nsplit">
+      <div className="small muted" style={{ marginBottom: 6 }}>{t('What you eat on…')}</div>
+      {[['dumbbell', 'var(--acc)', t('Training days'), p.trainDays], ['moon', 'var(--label-3)', t('Rest days'), p.restDays]].map(([icon, color, label, d]) =>
+        <div key={label} className="mrow">
+          <Icon name={icon} style={{ color, flex: 'none' }} />
+          <span className="nm">{label}{d && <span className="dim"> · {d.days} {t(d.days === 1 ? 'day' : 'days')}</span>}</span>
+          <span className="v">{d ? fmtNum(d.kcal) + ' kcal · ' + fmtNum(d.prot) + ' g' : '—'}</span>
+        </div>)}
+    </div>}
     <div className="small dim" style={{ marginTop: 8 }}>{t('Averages count only days with meals (or water) logged.')}</div>
   </div>
 }

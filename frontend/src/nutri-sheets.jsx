@@ -4,15 +4,18 @@
 import { useRef, useState } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
-import { fmtDate, fmtNum, fmtL, todayISO, isoOf, uid, MONTHS_LONG } from './lib/format.js'
+import { fmtDate, fmtNum, fmtL, fmtVol, durPart, todayISO, isoOf, uid, MONTHS_LONG } from './lib/format.js'
 import { t } from './lib/i18n.js'
-import { goalsOf, NUTRI_DEF, dayLog, dayTotals, mealsOn, workoutsOn, gymOn, runOn, balanceOf, nowHHMM, missedYesterday, MEAL_TYPES, mealTypeAt, mealTypeName } from './lib/nutrition.js'
+import { goalsOf, NUTRI_DEF, dayLog, dayTotals, mealsOn, gymOn, runOn, balanceOf, nowHHMM, missedYesterday, MEAL_TYPES, mealTypeAt, mealTypeName, workoutMs, trainMsOn } from './lib/nutrition.js'
+import { effectiveRoutine, setsDone, setLabel } from './lib/history.js'
+import { EXIDX } from './lib/exercises.js'
+import { nav } from './lib/nav.js'
 import { pickSurprise, markSeen } from './lib/fun.js'
 import { savePhoto, deletePhoto, usePhoto } from './lib/photos.js'
 import { reportHTML } from './lib/report.js'
 import { printHTML } from './lib/plan-share.js'
 import { MOBILE, shareExport } from './lib/mobile.js'
-import { confirmSheet, dayOverrideSheet } from './sheets.jsx'
+import { confirmSheet, dayOverrideSheet, startFlow, workoutDetailSheet } from './sheets.jsx'
 import Icon from './components/Icon.jsx'
 import { Button, Stepper, Switch, Segmented, Section, Row, TextField, TextArea, NumberField, SearchField } from './components/ui.jsx'
 
@@ -53,6 +56,7 @@ function PhotoPicker({ onPicked, children, variant = 'plain', icon = 'camera' })
 
 /* ============================ meal ============================ */
 const pad = n => String(n).padStart(2, '0')
+const r1 = v => Math.round((v || 0) * 10) / 10
 function MealSheet({ iso, meal, close }) {
   // A meal logged for a past day gets a neutral noon instead of the current clock time —
   // "now" only means something today. Either way the time is editable.
@@ -63,9 +67,11 @@ function MealSheet({ iso, meal, close }) {
   const [name, setName] = useState(meal?.name || '')
   const [kcal, setKcal] = useState(meal?.kcal ?? null)
   const [prot, setProt] = useState(meal?.prot ?? null)
+  const [carb, setCarb] = useState(meal?.carb ?? null)
+  const [fat, setFat] = useState(meal?.fat ?? null)
   const save = () => {
     if (!kcal && !prot) { toast(t('Enter calories or protein')); return }
-    const rec = { d: iso, time: pad(h) + ':' + pad(m), type, name: name.trim(), kcal: Math.round(kcal || 0), prot: Math.round((prot || 0) * 10) / 10 }
+    const rec = { d: iso, time: pad(h) + ':' + pad(m), type, name: name.trim(), kcal: Math.round(kcal || 0), prot: r1(prot), carb: r1(carb), fat: r1(fat) }
     update(s => {
       s.meals = s.meals || []
       if (meal) Object.assign(s.meals.find(x => x.id === meal.id) || {}, rec)
@@ -83,6 +89,8 @@ function MealSheet({ iso, meal, close }) {
     <div className="grid2" style={{ marginTop: 10 }}>
       <label className="nfield"><span>{t('Calories')}</span><span className="nfield-in"><NumberField value={kcal} nullable decimal={false} onChange={setKcal} placeholder="0" /><i>kcal</i></span></label>
       <label className="nfield"><span>{t('Protein')}</span><span className="nfield-in"><NumberField value={prot} nullable onChange={setProt} placeholder="0" /><i>g</i></span></label>
+      <label className="nfield"><span>{t('Carbs')}</span><span className="nfield-in"><NumberField value={carb} nullable onChange={setCarb} placeholder="0" /><i>g</i></span></label>
+      <label className="nfield"><span>{t('Fat')}</span><span className="nfield-in"><NumberField value={fat} nullable onChange={setFat} placeholder="0" /><i>g</i></span></label>
     </div>
     <div className="grid2" style={{ marginTop: 10 }}>
       <Stepper label={t('Hour')} value={h} step={1} decimal={false} onChange={v => setH(Math.min(23, Math.round(v || 0)))} />
@@ -158,6 +166,8 @@ export function NutriGoals({ close = () => {} }) {
     <div className="list" style={{ gap: 10 }}>
       <Stepper label={t('Calories')} unit="kcal" value={g.kcal} step={50} decimal={false} onChange={v => set({ kcal: Math.max(500, Math.round(v)) })} />
       <Stepper label={t('Protein')} unit="g" value={g.prot} step={5} decimal={false} onChange={v => set({ prot: Math.round(v) })} />
+      <Stepper label={t('Carbs')} unit="g" value={g.carb} step={10} decimal={false} onChange={v => set({ carb: Math.max(0, Math.round(v)) })} />
+      <Stepper label={t('Fat')} unit="g" value={g.fat} step={5} decimal={false} onChange={v => set({ fat: Math.max(0, Math.round(v)) })} />
       <Stepper label={t('Meals per day')} value={g.meals} step={1} decimal={false} onChange={v => set({ meals: Math.max(1, Math.min(10, Math.round(v))) })} />
       <Stepper label={t('Water')} unit="L" value={g.water} step={0.25} onChange={v => set({ water: Math.max(0.25, Math.min(10, v)) })} />
     </div>
@@ -255,8 +265,89 @@ export function MealRow({ m, iso }) {
   return <button className="nmeal" onClick={() => mealSheet(iso, m)}>
     <span className="tm">{m.time}</span>
     <span className="nm">{m.name || typeOf(m)}{m.name && m.type && <span className="dim"> · {typeOf(m)}</span>}</span>
-    <span className="v"><b>{fmtNum(m.kcal || 0)}</b> kcal · {fmtNum(m.prot || 0)} g</span>
+    <span className="v"><b>{fmtNum(m.kcal || 0)}</b> kcal<br /><span className="dim">{macroLine(m)}</span></span>
   </button>
+}
+// "40 P · 60 C · 15 F" — the letters follow the language (P · G · L in French).
+export const macroLine = m => [[m.prot, 'P'], [m.carb, 'C'], [m.fat, 'F']].map(([v, k]) => fmtNum(+v || 0) + ' ' + t(k)).join(' · ')
+
+/* ============================ macros + training for a day ============================ */
+// A progress bar that keeps going past the goal in a second colour, so "over" is visible
+// at a glance instead of the bar just sitting full.
+export function Meter({ value, goal, color = 'var(--acc)' }) {
+  const pct = goal > 0 ? value / goal : 0
+  // past the goal the bar rescales: the goal mark sits at 1/pct and the overshoot fills the rest
+  return <div className="meter">
+    <i style={{ width: (pct > 1 ? 100 / pct : pct * 100) + '%', background: color }} />
+    {pct > 1 && <b style={{ left: 100 / pct + '%', right: 0 }} />}
+  </div>
+}
+
+// Protein, carbs, fat and water against their goals, two by two.
+export function MacroGrid({ tot, g }) {
+  const cell = (icon, color, label, v, goal, unit, fmt = fmtNum) => <div>
+    <div className="small muted row" style={{ gap: 5 }}><Icon name={icon} style={{ color }} />{label}</div>
+    <div style={{ fontWeight: 600, fontSize: 17, margin: '2px 0 6px' }}>{fmt(v)} <span className="muted small">/ {fmt(goal)} {unit}</span></div>
+    <Meter value={v} goal={goal} color={color} />
+  </div>
+  return <div className="grid2 mgrid">
+    {cell('bolt', 'var(--purple)', t('Protein'), tot.prot, g.prot, 'g')}
+    {cell('flame', 'var(--yellow)', t('Carbs'), tot.carb, g.carb, 'g')}
+    {cell('drop', 'var(--pink)', t('Fat'), tot.fat, g.fat, 'g')}
+    {cell('drop', 'var(--teal)', t('Water'), tot.water, g.water, 'L', fmtL)}
+  </div>
+}
+
+// Rep sets grouped by weight and reps — "3 × 8 @ 75 kg, 1 × 6 @ 75 kg" — so a day reads at a
+// glance; effort ratings stay in the workout's own detail. Timed and cardio sets are listed.
+export function entryLine(e, unit) {
+  const done = e.sets.filter(s => s.done)
+  if (!done.length) return t('no sets')
+  if (!done.every(s => s.min == null && s.sec == null && s.r != null)) return done.map(s => setLabel(e.id, s, e.target)).join(' · ')
+  const runs = []
+  done.forEach(s => {
+    const last = runs[runs.length - 1], w = s.w || 0
+    if (last && last.r === s.r && last.w === w) last.n++
+    else runs.push({ n: 1, r: s.r, w })
+  })
+  return runs.map(x => x.n + ' × ' + x.r + (x.w > 0 ? ' @ ' + fmtNum(x.w) + ' ' + unit : '')).join(', ')
+}
+
+// What was trained on a day: the app's workouts in full (time, sets, volume, exercises), or
+// what the plan had for that day and a way to start it.
+export function DayTraining({ iso }) {
+  const st = useStore(s => s.S)
+  const ws = st.workouts.filter(w => w.d === iso)
+  const planned = effectiveRoutine(st, iso)
+  const log = dayLog(st, iso)
+  const isToday = iso === todayISO()
+  const total = trainMsOn(st, iso)
+  return <div className="card">
+    <div className="row between" style={{ marginBottom: ws.length ? 10 : 6 }}>
+      <h2 style={{ margin: 0 }}>{t('Training')}</h2>
+      {total >= 60000 && <span className="tag nt acc"><Icon name="timer" />{durPart(total)[0]}</span>}
+    </div>
+    {ws.map(w => <button key={w.id} className="nwork" onClick={() => workoutDetailSheet(w)}>
+      <div className="row between" style={{ gap: 8 }}>
+        <b className="ntl">{w.name}</b>
+        <Icon name="chevronRight" className="chev" />
+      </div>
+      <div className="small muted">{[...durPart(workoutMs(w)), t('{0} sets', setsDone(w)), fmtVol(w.vol || 0, st.unit)].join(' · ')}</div>
+      <div className="nwork-ex">{w.entries.map((e, i) => {
+        const ex = EXIDX[e.id]
+        return <div key={i} className="nwork-e">
+          <div className="nm capitalize">{ex ? ex.n : (e.n || e.id)}</div>
+          <div className="small muted">{entryLine(e, st.unit)}</div>
+        </div>
+      })}</div>
+    </button>)}
+    {!ws.length && (planned
+      ? <div className="row between" style={{ gap: 10 }}>
+          <div className="small muted">{t('Planned:')} <b style={{ color: 'var(--label)' }}>{planned.name}</b>{iso < todayISO() && <span className="dim"> · {t('Not done')}</span>}</div>
+          {isToday && <Button size="sm" variant="primary" icon="play" onClick={() => st.active ? nav('/workout') : startFlow(planned.id)}>{st.active ? t('Resume') : t('Start')}</Button>}
+        </div>
+      : <div className="small muted">{log.gym ? t('Trained outside the app') : t('Rest day')}</div>)}
+  </div>
 }
 
 // Read-only view of one day, opened from the calendar: what was eaten, drunk and trained,
@@ -267,27 +358,24 @@ function DayDetail({ iso, close, onOpenDay }) {
   const tot = dayTotals(st, iso)
   const ms = mealsOn(st, iso)
   const log = dayLog(st, iso)
-  const ws = workoutsOn(st, iso)
   const bal = balanceOf(tot.kcal, g.kcal)
-  const tile = (icon, label, v, goal, color) => <div className="tile">
-    <div className="l"><Icon name={icon} />{label}</div>
-    <div className="v" style={{ fontSize: 19, color }}>{v}</div>
-    <div className="small dim">/ {goal}</div>
-  </div>
   return <>
     <h3 style={{ textTransform: 'capitalize' }}>{iso === todayISO() ? t('Today') : fmtDate(iso, true)}</h3>
-    <div className="tiles" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-      {tile('fork', t('Calories'), fmtNum(tot.kcal), fmtNum(g.kcal), tot.meals ? { over: 'var(--orange)', hit: 'var(--acc)', under: 'var(--blue)' }[bal.status] : undefined)}
-      {tile('bolt', t('Protein'), fmtNum(tot.prot) + ' g', fmtNum(g.prot) + ' g')}
-      {tile('drop', t('Water'), fmtL(tot.water) + ' L', fmtL(g.water) + ' L')}
+    <div className="row" style={{ gap: 6, alignItems: 'baseline' }}>
+      <div className="big" style={{ color: tot.meals ? { over: 'var(--orange)', hit: 'var(--acc)', under: 'var(--blue)' }[bal.status] : undefined }}>{fmtNum(tot.kcal)}</div>
+      <span className="muted">/ {fmtNum(g.kcal)} kcal</span>
     </div>
+    <Meter value={tot.kcal} goal={g.kcal} />
+    <div style={{ height: 12 }} />
+    <MacroGrid tot={tot} g={g} />
+    <div style={{ height: 12 }} />
+    <DayTraining iso={iso} />
     <h4 className="sec">{t('Meals')}</h4>
     {ms.length
       ? <div className="nmeals">{ms.map(m => <MealRow key={m.id} m={m} iso={iso} />)}</div>
       : <div className="small muted">{t('No meals logged for this day yet.')}</div>}
-    <h4 className="sec">{t('Activity')}</h4>
+    <h4 className="sec">{t('Cardio')}</h4>
     <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-      <span className={'tag nt' + (gymOn(st, iso) ? ' acc' : '')}><Icon name="dumbbell" />{ws.length ? ws.map(w => w.name).join(', ') : gymOn(st, iso) ? t('Gym') : t('No gym')}</span>
       <span className="tag nt" style={log.run ? { color: 'var(--orange)', background: 'color-mix(in srgb,var(--orange) 16%,transparent)' } : undefined}>
         <Icon name="figureRun" />{log.run ? [t('Cardio'), log.km ? fmtNum(log.km) + ' km' : '', log.min ? log.min + ' min' : ''].filter(Boolean).join(' · ') : t('No cardio')}
       </span>
@@ -327,11 +415,11 @@ export function MealHistory() {
     {!days.length && <div className="card"><div className="small muted">{(st.meals || []).length ? t('No meals match.') : t('No meals logged yet.')}</div></div>}
     {days.slice(0, limit).map(d => {
       const list = byDay[d].sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0))
-      const kcal = list.reduce((a, m) => a + (+m.kcal || 0), 0), prot = list.reduce((a, m) => a + (+m.prot || 0), 0)
+      const sum = k => list.reduce((a, m) => a + (+m[k] || 0), 0)
       return <div key={d} className="card">
         <button className="row between" style={{ width: '100%', marginBottom: 6 }} onClick={() => dayDetailSheet(d)}>
           <b style={{ textTransform: 'capitalize' }}>{d === todayISO() ? t('Today') : fmtDate(d, true)}</b>
-          <span className="small muted">{fmtNum(kcal)} kcal · {fmtNum(prot)} g</span>
+          <span className="small muted">{fmtNum(sum('kcal'))} kcal · {macroLine({ prot: sum('prot'), carb: sum('carb'), fat: sum('fat') })}</span>
         </button>
         <div className="nmeals">{list.map(m => <MealRow key={m.id} m={m} iso={d} />)}</div>
       </div>

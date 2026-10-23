@@ -6,21 +6,10 @@ import { t, dateLocale } from '../lib/i18n.js'
 import { MOBILE } from '../lib/mobile.js'
 import { goalsOf, mealsOn, dayTotals, dayLog, gymOn, runOn, workoutsOn, balanceOf, surplusAlert, suggestionsFor } from '../lib/nutrition.js'
 import { flushPhotos } from '../lib/photos.js'
-import { mealSheet, daySheet, dayDetailSheet, PhotoThumb, photoViewer, NutriCalendar, NutriGoals, ReportSheet, FunSettings, MealHistory, MealRow } from '../nutri-sheets.jsx'
+import { mealSheet, daySheet, dayDetailSheet, PhotoThumb, photoViewer, NutriCalendar, NutriGoals, ReportSheet, FunSettings, MealHistory, MealRow, Meter, MacroGrid, DayTraining } from '../nutri-sheets.jsx'
 import { NutritionStats } from './Stats.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button, Segmented } from '../components/ui.jsx'
-
-// A progress bar that keeps going past the goal in a second colour, so "over" is visible
-// at a glance instead of the bar just sitting full.
-function Meter({ value, goal, color = 'var(--acc)' }) {
-  const pct = goal > 0 ? value / goal : 0
-  // past the goal the bar rescales: the goal mark sits at 1/pct and the overshoot fills the rest
-  return <div className="meter">
-    <i style={{ width: (pct > 1 ? 100 / pct : pct * 100) + '%', background: color }} />
-    {pct > 1 && <b style={{ left: 100 / pct + '%', right: 0 }} />}
-  </div>
-}
 
 function BalanceTag({ kcal, goal, meals }) {
   if (!meals) return <span className="tag nt">{t('Nothing logged yet')}</span>
@@ -73,9 +62,10 @@ function Suggestions({ S, iso }) {
   </div>
 }
 
-// The page is split into sections so everything MyMacroLog did has its own place: the day
-// itself, the month at a glance, every meal so far, the numbers over time, and the
-// goals/motivation settings.
+// The Journal: what you ate and what you trained, day by day. Training is planned ahead in
+// Plan; meals are logged here on the day. Split into sections: the day itself, the month at
+// a glance, every meal so far, the numbers over time, and the goals/motivation settings.
+// `?d=YYYY-MM-DD` opens a given day (Plan links here).
 const SECTIONS = ['day', 'month', 'meals', 'stats', 'settings']
 
 export default function Nutrition() {
@@ -84,7 +74,10 @@ export default function Nutrition() {
   const setSec = v => setParams(v === 'day' ? {} : { s: v }, { replace: true })
   const S = useStore(s => s.S)
   const update = useStore(s => s.update)
-  const [iso, setIso] = useState(todayISO())
+  const [iso, setIso] = useState(() => {
+    const d = params.get('d')
+    return /^\d{4}-\d{2}-\d{2}$/.test(d || '') && d <= todayISO() ? d : todayISO()
+  })
   useEffect(() => { flushPhotos() }, [])
 
   const today = todayISO()
@@ -112,7 +105,7 @@ export default function Nutrition() {
 
   return <div className="narrow">
     <div className="hdr">
-      <div><h1>{t('Nutrition')}</h1><div className="sub">{isToday ? t('Today') : sel.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
+      <div><h1>{t('Journal')}</h1><div className="sub">{isToday ? t('Today') : sel.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
     </div>
 
     <Segmented className="seg-range seg-nutri" value={sec} onChange={setSec} options={[
@@ -170,24 +163,15 @@ export default function Nutrition() {
           <div className="big">{fmtNum(tot.kcal)}</div><span className="muted">/ {fmtNum(g.kcal)} kcal</span>
         </div>
         <Meter value={tot.kcal} goal={g.kcal} />
-        <div className="grid2" style={{ marginTop: 14 }}>
-          <div>
-            <div className="small muted row" style={{ gap: 5 }}><Icon name="bolt" style={{ color: 'var(--purple)' }} />{t('Protein')}</div>
-            <div style={{ fontWeight: 600, fontSize: 18, margin: '2px 0 6px' }}>{fmtNum(tot.prot)} <span className="muted small">/ {fmtNum(g.prot)} g</span></div>
-            <Meter value={tot.prot} goal={g.prot} color="var(--purple)" />
-          </div>
-          <div>
-            <div className="small muted row" style={{ gap: 5 }}><Icon name="drop" style={{ color: 'var(--teal)' }} />{t('Water')}</div>
-            <div style={{ fontWeight: 600, fontSize: 18, margin: '2px 0 6px' }}>{fmtL(tot.water)} <span className="muted small">/ {fmtL(g.water)} L</span></div>
-            <Meter value={tot.water} goal={g.water} color="var(--teal)" />
-          </div>
-        </div>
+        <div style={{ marginTop: 14 }}><MacroGrid tot={tot} g={g} /></div>
         <div className="chips" style={{ marginTop: 12 }}>
           {[0.25, 0.5].map(v => <button key={v} className="chip nchip" onClick={() => update(s => { s.days = s.days || {}; const d = s.days[iso] || {}; s.days[iso] = { ...d, water: Math.min(10, Math.round(((d.water || 0) + v) * 100) / 100) } })}>
             <Icon name="drop" style={{ color: 'var(--teal)', marginRight: 4 }} />+{fmtL(v)} L</button>)}
           {tot.water > 0 && <button className="chip nchip" onClick={() => update(s => { const d = s.days[iso]; s.days[iso] = { ...d, water: Math.max(0, Math.round((d.water - 0.25) * 100) / 100) } })}>−{fmtL(0.25)} L</button>}
         </div>
       </div>
+
+      <DayTraining iso={iso} />
 
       <div className="card">
         <div className="row between" style={{ marginBottom: 10 }}>
@@ -204,11 +188,11 @@ export default function Nutrition() {
 
       <div className="card tappable" style={{ cursor: 'pointer' }} onClick={() => daySheet(iso)}>
         <div className="row between" style={{ marginBottom: 8 }}>
-          <h2 style={{ margin: 0 }}>{t('Activity & notes')}</h2>
+          <h2 style={{ margin: 0 }}>{t('Cardio, photo & notes')}</h2>
           <Icon name="pencil" className="chev" />
         </div>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <span className={'tag nt' + (gymOn(S, iso) ? ' acc' : '')}><Icon name="dumbbell" />{ws.length ? ws.map(w => w.name).join(', ') : t('Gym')}</span>
+          {!ws.length && <span className={'tag nt' + (gymOn(S, iso) ? ' acc' : '')}><Icon name="dumbbell" />{t('Gym outside the app')}</span>}
           <span className="tag nt" style={runOn(S, iso) ? { color: 'var(--orange)', background: 'color-mix(in srgb,var(--orange) 16%,transparent)' } : undefined}>
             <Icon name="figureRun" />{t('Cardio')}{runOn(S, iso) && (log.km || log.min) ? ' · ' + [log.km ? fmtNum(log.km) + ' km' : '', log.min ? log.min + ' min' : ''].filter(Boolean).join(' · ') : ''}
           </span>

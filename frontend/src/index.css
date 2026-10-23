@@ -58,6 +58,7 @@
   --fast:140ms; --med:220ms;
 
   --sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px);
   --sat:env(safe-area-inset-top,0px);
 }
 
@@ -274,48 +275,43 @@ h4.sec{
 /* ----------------------------------------------------------- tab bar ----- */
 #tabbar{
   position:fixed;left:0;right:0;bottom:0;z-index:50;
-  display:flex;justify-content:space-around;align-items:flex-end;
-  padding:7px 6px calc(6px + var(--sab));
+  display:flex;justify-content:space-around;align-items:stretch;
+  padding:6px max(4px,var(--sal)) calc(6px + var(--sab)) max(4px,var(--sar));
   background:color-mix(in srgb,var(--bg-el) 72%,transparent);
   backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);
   border-top:var(--hair) solid var(--sep-op);
 }
 :root[data-theme="light"] #tabbar{background:rgba(249,249,251,.78)}
+/* Six equal tabs, Start included: same icon size, same label, same spacing. */
 #tabbar button{
-  flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
-  color:var(--label-3);font-size:10px;font-weight:500;letter-spacing:.005em;padding-top:3px;
+  flex:1 1 0;min-width:0;min-height:48px;position:relative;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  color:var(--label-3);font-size:10.5px;font-weight:500;letter-spacing:.005em;line-height:1.1;
   transition:color var(--fast);
 }
+#tabbar button span{max-width:100%;padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* The inactive tint is semi-transparent, so wherever two strokes cross inside an
    icon (the calendar's hangers over its frame, the divider's caps on its sides)
    the alpha doubled up and the icon read as a stack of loose layers. Carrying the
    fade on the <svg> instead of in the stroke colour flattens the icon first and
    fades it as one shape — and it does that for every icon, not just this one. */
-#tabbar button .icn{font-size:25px;--icon-stroke:1.65;color:var(--label)}
+#tabbar button .icn{font-size:24px;--icon-stroke:1.65;color:var(--label);transition:transform var(--fast) var(--ease)}
 #tabbar button.on{color:var(--acc)}
 #tabbar button.on .icn{--icon-stroke:2;color:inherit;opacity:1}
-#tabbar button.start{margin-top:-24px}
-#tabbar button.start .cir{
-  width:52px;height:52px;border-radius:50%;background:var(--acc);color:var(--on-acc);
-  display:flex;align-items:center;justify-content:center;position:relative;
-  box-shadow:0 6px 18px -4px color-mix(in srgb,var(--acc) 55%,transparent);
-  transition:transform var(--fast) var(--ease);
+#tabbar button:active .icn{transform:scale(.92)}
+/* A workout in progress: Start turns orange (Resume) with a small pulsing dot, no disc. */
+#tabbar button.start.rec{color:var(--orange)}
+#tabbar button.start.rec .icn{color:inherit;opacity:1}
+#tabbar button.start.rec::after{
+  content:'';position:absolute;top:5px;left:calc(50% + 9px);width:7px;height:7px;border-radius:50%;
+  background:var(--orange);animation:ping 1.9s var(--ease) infinite;
 }
-#tabbar button.start:active .cir{transform:scale(.93)}
-#tabbar button.start .cir .icn{font-size:26px;--icon-stroke:2;color:inherit;opacity:1}
-#tabbar button.start span{color:var(--acc);font-weight:600}
-/* `.cir` is itself a <span>, so the label rules above and below reach it too and
-   outrank the `.cir` block — which is how the running state ended up painting an
-   orange play glyph onto an orange disc. Both states restate their own colour.
-   The disc is orange in either theme, so its glyph is black, not `--on-acc`. */
-#tabbar button.start .cir{color:var(--on-acc)}
-#tabbar button.start.rec .cir{background:var(--orange);color:#000;box-shadow:0 6px 18px -4px color-mix(in srgb,var(--orange) 55%,transparent)}
-#tabbar button.start.rec span{color:var(--orange)}
-#tabbar button.start.rec .cir::after{
-  content:'';position:absolute;inset:0;border-radius:50%;
-  border:2px solid var(--orange);animation:ping 1.9s var(--ease) infinite;
+@keyframes ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--orange) 70%,transparent)}100%{box-shadow:0 0 0 6px transparent}}
+
+@media (max-width:360px){
+  #tabbar button{font-size:9.5px;gap:3px}
+  #tabbar button .icn{font-size:22px}
 }
-@keyframes ping{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.45);opacity:0}}
 
 /* ------------------------------------------------------------ week strip -- */
 .week{display:flex;justify-content:space-between;gap:4px}
@@ -907,7 +903,6 @@ h4.sec{
     border:var(--hair) solid var(--sep-op);border-radius:var(--r-xl);
     padding:7px 10px 9px;box-shadow:0 12px 40px -10px rgba(0,0,0,.5);
   }
-  #tabbar button.start{margin-top:-26px}
   .sheet{left:50%;right:auto;margin-left:-320px;width:640px;border-radius:var(--r-xl) var(--r-xl) 0 0}
   .center{width:340px}
   #timer{left:50%;right:auto;margin-left:-260px;width:520px;bottom:112px}
@@ -964,6 +959,18 @@ h4.sec{
 .cal-k.over{color:var(--orange)}.cal-k.hit{color:var(--acc)}.cal-k.under{color:var(--blue)}
 /* five sections on a phone: tighter buttons so every label fits */
 .seg-nutri button{padding:6px 2px;font-size:13px}
+/* Journal: macro meters, the day's workouts, the training/rest split */
+.mgrid{row-gap:14px}
+.nwork{display:block;width:100%;text-align:left;padding:10px 0;border-top:var(--hair) solid var(--sep)}
+.nwork:first-of-type{border-top:0;padding-top:0}
+.nwork:active{opacity:.6}
+.nwork-ex{margin-top:6px}
+.nwork-e{padding:5px 0}
+.nwork-e .nm{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nmeal .v{text-align:right;line-height:1.35}
+.nmeal .v .dim{font-size:12px}
+.nsplit{margin-top:12px;padding-top:10px;border-top:var(--hair) solid var(--sep)}
+.item .plan-lived{display:block;max-width:100%;text-align:left;color:var(--acc);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* calories per day, goal as a dashed line */
 .nbars{position:relative;display:grid;grid-template-columns:repeat(var(--n),1fr);gap:3px;height:120px;align-items:end;margin-top:6px}
