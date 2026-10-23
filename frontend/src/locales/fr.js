@@ -364,6 +364,7 @@ export default {
   'Week': 'Semaine',
   'not trained': 'non travaillé',
   'Not trained in this period': 'Non travaillé sur cette période',
+  'No checked sets in this period — check off your sets during a workout to see the muscles you worked.': 'Aucune série validée sur cette période — coche tes séries pendant la séance pour voir les muscles travaillés.',
   'Every muscle group got some work in this period.': 'Chaque groupe musculaire a été sollicité sur cette période.',
   'No workouts in this period yet.': 'Pas encore d\'entraînement sur cette période.',
   'What this session hits': 'Ce que cette séance sollicite',

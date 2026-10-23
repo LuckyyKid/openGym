@@ -118,7 +118,10 @@ function MuscleBalance({ S }) {
         <span className="bar"><i style={{ width: Math.round(load[m] / max * 100) + '%', background: on ? 'var(--yellow)' : undefined }} /></span>
         <span className="v">{t('{0} sets', sets(m))}</span>
       </div>)}
-      {missed.length > 0 && <>
+      {/* Workouts finished without a single checked set leave the map grey; say why rather
+          than listing every muscle as untrained. */}
+      {!worked.length && !on && <div className="muted small" style={{ marginTop: 10 }}>{t('No checked sets in this period — check off your sets during a workout to see the muscles you worked.')}</div>}
+      {missed.length > 0 && (worked.length > 0 || on) && <>
         <h4 className="sec" style={{ marginTop: 12 }}>{on ? t('No hard sets in this period') : t('Not trained in this period')}</h4>
         <div className="mchips">{missed.map(m => <span key={m} className="mchip miss">{t(MUSCLE_NAME[m])}</span>)}</div>
       </>}
