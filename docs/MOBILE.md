@@ -35,7 +35,8 @@ npx cap open android        # opens Android Studio → run on emulator or device
 npx cap open ios            # opens Xcode (Mac only) → set your signing team, then run
 ```
 
-`npm run build:mobile` bakes the CDN media base into the bundle and copies the web build
+`npm run build:mobile` reads `frontend/.env.mobile` (`VITE_MOBILE=1` and the CDN media base),
+bakes them into the bundle and copies the web build
 into both native projects — re-run it after every web-code change before building natively.
 
 > **Heads-up:** after `build:mobile`, `frontend/dist` contains the *mobile* bundle.
